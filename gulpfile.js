@@ -1,23 +1,39 @@
 /* eslint-env node */
 /* eslint-disable no-sync */
-var gulp = require('gulp');
-var sass = require('gulp-sass');
+//var gulp = require('gulp');
+import gulp from 'gulp'
+//var sass = require('gulp-sass');
+import sass from 'gulp-sass'
 
 
-var del = require('del');
-var execSync = require('child_process').execSync;
-var osenv = require('osenv');
-var path = require('path');
-var runSequence = require('run-sequence');
+//var del = require('del');
+let del = await import('del')
+//import del from 'del'
+//var execSync = require('child_process').execSync;
+import execSync from 'child_process'
+//var osenv = require('osenv');
+import osenv from 'osenv'
+//var path = require('path');
+import path from 'path'
+//var runSequence = require('run-sequence');
+import runSequence from 'run-sequence'
 
-var eslint = require('gulp-eslint');
-var threshold = require('gulp-eslint-threshold');
-var jsonEditor = require('gulp-json-editor');
-var shell = require('gulp-shell');
-var symlink = require('gulp-symlink');
-var zip = require('gulp-zip');
+//var eslint = require('gulp-eslint');
+import eslint from 'gulp-eslint'
+//var threshold = require('gulp-eslint-threshold');
+import threshold from 'gulp-eslint-threshold'
+//var jsonEditor = require('gulp-json-editor');
+import jsonEditor from 'gulp-json-editor'
+//var shell = require('gulp-shell');
+import shell from 'gulp-shell'
+//var symlink = require('gulp-symlink');
+import symlink from 'gulp-symlink'
+//var zip = require('gulp-zip');
+import zip from 'gulp-zip'
 
-var metadata = require('./src/metadata.json');
+
+//var metadata = require('./src/metadata.json');
+import metadata from './src/metadata.json' assert {type: "json"}
 
 var paths = {
   src: [
