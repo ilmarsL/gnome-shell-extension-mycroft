@@ -7,7 +7,8 @@ import sass from 'gulp-sass'
 
 
 //var del = require('del');
-let del = await import('del')
+//let del = await import('del')
+import { deleteSync } from 'del'
 //import del from 'del'
 //var execSync = require('child_process').execSync;
 import execSync from 'child_process'
@@ -101,7 +102,7 @@ gulp.task('sass', function () {
 });
 
 gulp.task('clean', function (cb) {
-  return del([ 'build/', metadata.uuid ], cb);
+  return deleteSync([ 'build/', metadata.uuid ], cb);
 });
 
 gulp.task('copy', function () {
@@ -161,6 +162,7 @@ gulp.task('build', function (cb) {
   );
 });
 
+/*
 gulp.task('watch', [ 'build' ], function () {
   gulp.watch(paths.src, [ 'copy' ]);
   gulp.watch(paths.lib, [ 'copy-lib' ]);
@@ -171,25 +173,50 @@ gulp.task('watch', [ 'build' ], function () {
   gulp.watch(paths.schemas, [ 'schemas' ]);
   gulp.watch('sass/*.scss', [ 'sass' ]);
 });
+*/
+
+gulp.task('watch', gulp.series('build', function () {
+  gulp.watch(paths.src, [ 'copy' ]);
+  gulp.watch(paths.lib, [ 'copy-lib' ]);
+  gulp.watch('shellscripts/*.sh', [ 'copy-scripts' ]);
+  gulp.watch('icons/*', [ 'copy-icons' ]);
+  gulp.watch('suggestions/*', [ 'copy-suggestions' ]);
+  gulp.watch(paths.metadata, [ 'metadata' ]);
+  gulp.watch(paths.schemas, [ 'schemas' ]);
+  gulp.watch('sass/*.scss', [ 'sass' ]);
+}));
+
+
 gulp.task('reset-prefs', shell.task([
   'dconf reset -f /org/gnome/shell/extensions/mycroft/',
 ]));
 
-gulp.task('uninstall', function (cb) {
-  return del([ paths.install ], {
+gulp.task('uninstall', async function (cb) {
+  return deleteSync([ paths.install ], {
     force: true,
   }, cb);
 });
 
+/*
 gulp.task('install-link', [ 'uninstall', 'build' ], function () {
   return gulp.src([ 'build' ])
     .pipe(symlink(paths.install));
 });
+*/
+gulp.task('install-link', gulp.series('uninstall', 'build' , function () {
+  return gulp.src([ 'build' ])
+    .pipe(symlink(paths.install));
+}));
 
-gulp.task('install', [ 'uninstall', 'build' ], function () {
+//gulp.task('install', [ 'uninstall', 'build' ], function () {
+//  return gulp.src([ 'build/**/*' ])
+//    .pipe(gulp.dest(paths.install));
+//});
+
+gulp.task('install', gulp.series('uninstall', 'build' , function () {
   return gulp.src([ 'build/**/*' ])
     .pipe(gulp.dest(paths.install));
-});
+}));
 
 gulp.task('require-clean-wd', function (cb) {
   var count = execSync('git status --porcelain | wc -l').toString().replace(/\n$/, '');
@@ -235,6 +262,7 @@ gulp.task('dist', function (cb) {
   });
 });
 
+/*
 gulp.task('release', [ 'lint' ], function (cb) {
   runSequence(
     'require-clean-wd',
@@ -244,6 +272,17 @@ gulp.task('release', [ 'lint' ], function (cb) {
     cb
   );
 });
+*/
+
+gulp.task('release', gulp.series('lint', function (cb) {
+  runSequence(
+    'require-clean-wd',
+    'bump',
+    'push',
+    'dist',
+    cb
+  );
+}));
 
 gulp.task('enable-debug', shell.task([
   'dconf write /org/gnome/shell/extensions/mycroft/debug true',
