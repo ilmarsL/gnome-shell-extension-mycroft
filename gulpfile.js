@@ -1,39 +1,24 @@
 /* eslint-env node */
 /* eslint-disable no-sync */
-//var gulp = require('gulp');
+
 import gulp from 'gulp'
-//var sass = require('gulp-sass');
 import sass from 'gulp-sass'
 
 
-//var del = require('del');
-//let del = await import('del')
 import { deleteSync } from 'del'
-//import del from 'del'
-//var execSync = require('child_process').execSync;
 import execSync from 'child_process'
-//var osenv = require('osenv');
 import osenv from 'osenv'
-//var path = require('path');
 import path from 'path'
-//var runSequence = require('run-sequence');
 import runSequence from 'run-sequence'
 
-//var eslint = require('gulp-eslint');
 import eslint from 'gulp-eslint'
-//var threshold = require('gulp-eslint-threshold');
 import threshold from 'gulp-eslint-threshold'
-//var jsonEditor = require('gulp-json-editor');
 import jsonEditor from 'gulp-json-editor'
-//var shell = require('gulp-shell');
 import shell from 'gulp-shell'
-//var symlink = require('gulp-symlink');
 import symlink from 'gulp-symlink'
-//var zip = require('gulp-zip');
 import zip from 'gulp-zip'
 
 
-//var metadata = require('./src/metadata.json');
 import metadata from './src/metadata.json' assert {type: "json"}
 
 var paths = {
@@ -162,19 +147,6 @@ gulp.task('build', function (cb) {
   );
 });
 
-/*
-gulp.task('watch', [ 'build' ], function () {
-  gulp.watch(paths.src, [ 'copy' ]);
-  gulp.watch(paths.lib, [ 'copy-lib' ]);
-  gulp.watch('shellscripts/*.sh', [ 'copy-scripts' ]);
-  gulp.watch('icons/*', [ 'copy-icons' ]);
-  gulp.watch('suggestions/*', [ 'copy-suggestions' ]);
-  gulp.watch(paths.metadata, [ 'metadata' ]);
-  gulp.watch(paths.schemas, [ 'schemas' ]);
-  gulp.watch('sass/*.scss', [ 'sass' ]);
-});
-*/
-
 gulp.task('watch', gulp.series('build', function () {
   gulp.watch(paths.src, [ 'copy' ]);
   gulp.watch(paths.lib, [ 'copy-lib' ]);
@@ -197,21 +169,10 @@ gulp.task('uninstall', async function (cb) {
   }, cb);
 });
 
-/*
-gulp.task('install-link', [ 'uninstall', 'build' ], function () {
-  return gulp.src([ 'build' ])
-    .pipe(symlink(paths.install));
-});
-*/
 gulp.task('install-link', gulp.series('uninstall', 'build' , function () {
   return gulp.src([ 'build' ])
     .pipe(symlink(paths.install));
 }));
-
-//gulp.task('install', [ 'uninstall', 'build' ], function () {
-//  return gulp.src([ 'build/**/*' ])
-//    .pipe(gulp.dest(paths.install));
-//});
 
 gulp.task('install', gulp.series('uninstall', 'build' , function () {
   return gulp.src([ 'build/**/*' ])
@@ -261,18 +222,6 @@ gulp.task('dist', function (cb) {
     stream.on('end', cb);
   });
 });
-
-/*
-gulp.task('release', [ 'lint' ], function (cb) {
-  runSequence(
-    'require-clean-wd',
-    'bump',
-    'push',
-    'dist',
-    cb
-  );
-});
-*/
 
 gulp.task('release', gulp.series('lint', function (cb) {
   runSequence(
