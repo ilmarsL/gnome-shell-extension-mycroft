@@ -25,5 +25,8 @@
     "install-extension": "gulp install",
     "uninstall-extension": "gulp uninstall",
     "test": "gulp test"
+  },
+  "dependencies": {
+    "sass": "^1.56.0"
   }
 }

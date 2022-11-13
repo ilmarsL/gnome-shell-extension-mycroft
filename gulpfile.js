@@ -2,11 +2,13 @@
 /* eslint-disable no-sync */
 
 import gulp from 'gulp'
-import sass from 'gulp-sass'
+import dartSass from 'sass'
+import gulpSass from 'gulp-sass'
+const sass = gulpSass(dartSass)
 
 
 import { deleteSync } from 'del'
-import execSync from 'child_process'
+import {execSync} from 'child_process'
 import osenv from 'osenv'
 import path from 'path'
 import runSequence from 'run-sequence'
@@ -76,7 +78,7 @@ gulp.task('lint', function () {
     }));
 });
 
-gulp.task('sass', function () {
+gulp.task('sass', async function () {
   return gulp.src('sass/*.scss')
     .pipe(sass({
       errLogToConsole: true,
@@ -86,35 +88,36 @@ gulp.task('sass', function () {
     .pipe(gulp.dest('build'));
 });
 
-gulp.task('clean', function (cb) {
+gulp.task('clean', async function (cb) {
   return deleteSync([ 'build/', metadata.uuid ], cb);
 });
 
-gulp.task('copy', function () {
+gulp.task('copy', async function (cb) {
   return gulp.src(paths.src)
     .pipe(gulp.dest('build'));
+    cb();
 });
-gulp.task('copy-icons', function () {
+gulp.task('copy-icons', async function () {
   return gulp.src('icons/*')
     .pipe(gulp.dest('build/icons'));
 });
-gulp.task('copy-suggestions', function () {
+gulp.task('copy-suggestions', async function () {
   return gulp.src('suggestions/*')
     .pipe(gulp.dest('build/suggestions'));
 });
-gulp.task('copy-scripts', function () {
+gulp.task('copy-scripts', async function () {
   return gulp.src('shellscripts/*.sh')
     .pipe(gulp.dest('build/shellscripts'));
 });
 
-gulp.task('copy-license', function () {
+gulp.task('copy-license', async function () {
   return gulp.src([ 'LICENSE' ])
     .pipe(gulp.dest('build'));
 });
 gulp.task('copy-release', function () {
   return gulp.src('build/**/*').pipe(gulp.dest(metadata.uuid));
 });
-gulp.task('metadata', function () {
+gulp.task('metadata', async function () {
   return gulp.src(paths.metadata)
     .pipe(jsonEditor(function (json) {
       json.version = getVersion();
@@ -125,15 +128,15 @@ gulp.task('metadata', function () {
     .pipe(gulp.dest('build'));
 });
 
-gulp.task('schemas', shell.task([
+gulp.task('schemas', function(cb) {shell.task([
   'mkdir -p build/schemas',
   'glib-compile-schemas --strict --targetdir build/schemas src/schemas/',
-]));
+])
+cb();
+});
 
-gulp.task('build', function (cb) {
-  runSequence(
-    'clean',
-    [
+gulp.task('build', gulp.series(
+      'clean', 
       'metadata',
       'schemas',
       'copy',
@@ -141,11 +144,8 @@ gulp.task('build', function (cb) {
       'copy-icons',
       'copy-suggestions',
       'copy-license',
-      'sass',
-    ],
-    cb
-  );
-});
+      'sass',  
+));
 
 gulp.task('watch', gulp.series('build', function () {
   gulp.watch(paths.src, [ 'copy' ]);
@@ -174,7 +174,9 @@ gulp.task('install-link', gulp.series('uninstall', 'build' , function () {
     .pipe(symlink(paths.install));
 }));
 
-gulp.task('install', gulp.series('uninstall', 'build' , function () {
+gulp.task('install', gulp.series('uninstall', 'build' , async function () {
+  console.log('install task running...')
+  console.log(paths.install)
   return gulp.src([ 'build/**/*' ])
     .pipe(gulp.dest(paths.install));
 }));
