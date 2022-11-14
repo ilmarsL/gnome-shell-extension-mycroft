@@ -8,6 +8,7 @@ const sass = gulpSass(dartSass)
 
 
 import { deleteSync } from 'del'
+import { deleteAsync } from 'del'
 import {execSync} from 'child_process'
 import osenv from 'osenv'
 import path from 'path'
@@ -88,8 +89,8 @@ gulp.task('sass', async function () {
     .pipe(gulp.dest('build'));
 });
 
-gulp.task('clean', async function (cb) {
-  return deleteSync([ 'build/', metadata.uuid ], cb);
+gulp.task('clean', function () {
+  return deleteAsync([ 'build/*/']);
 });
 
 gulp.task('copy', async function (cb) {
@@ -136,7 +137,7 @@ cb();
 });
 
 gulp.task('build', gulp.series(
-      'clean', 
+      'clean',
       'metadata',
       'schemas',
       'copy',
@@ -174,12 +175,13 @@ gulp.task('install-link', gulp.series('uninstall', 'build' , function () {
     .pipe(symlink(paths.install));
 }));
 
-gulp.task('install', gulp.series('uninstall', 'build' , async function () {
-  console.log('install task running...')
-  console.log(paths.install)
-  return gulp.src([ 'build/**/*' ])
+
+gulp.task('deploy', async function(){
+  return gulp.src('build/**/*')
     .pipe(gulp.dest(paths.install));
-}));
+})
+
+gulp.task('install', gulp.series('uninstall', 'build' , 'deploy'));
 
 gulp.task('require-clean-wd', function (cb) {
   var count = execSync('git status --porcelain | wc -l').toString().replace(/\n$/, '');
@@ -288,3 +290,5 @@ gulp.task('default', function () {
   );
   /* eslint-esnable no-console, max-len */
 });
+
+//exports.install = series('uninstall', 'build' , 'deploy');
