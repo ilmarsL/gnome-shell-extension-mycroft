@@ -45,16 +45,18 @@ var paths = {
 function getVersion(rawTag) {
   var sha1, tag;
   sha1 = execSync('git rev-parse --short HEAD').toString().replace(/\n$/, '');
-
+  console.log('rawTag');
+  console.log(rawTag);
+  //for now use tag from src/metadata.json
+  if (rawTag) {
+    return rawTag;
+  }
+  
   try {
     tag = execSync('git describe --tags --exact-match ' + sha1 + ' 2>/dev/null').toString().replace(/\n$/, '');
   } catch (e) {
     return sha1;
-  }
-
-  if (rawTag) {
-    return tag;
-  }
+  }  
 
   var v = parseInt(tag.replace(/^v/, ''), 10);
   if (isNaN(v)) {
@@ -121,7 +123,7 @@ gulp.task('copy-release', function () {
 gulp.task('metadata', async function () {
   return gulp.src(paths.metadata)
     .pipe(jsonEditor(function (json) {
-      json.version = getVersion();
+      json.version = getVersion(metadata.version);
       return json;
     }, {
       end_with_newline: true,

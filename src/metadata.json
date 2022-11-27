@@ -1,5 +1,5 @@
 {
- "version": 1.01,
+ "version": 5,
  "name": "Mycroft AI Assistant",
  "settings-schema": "org.gnome.shell.extensions.mycroft",
  "shell-version": [
@@ -10,7 +10,8 @@
   "3.22",
   "3.24",
   "3.26",
-  "3.28"
+  "3.28",
+  "42"
  ],
  "url": "https://github.com/lolstring/gnome-shell-extension-mycroft",
  "uuid": "mycroft@rahul.io",
