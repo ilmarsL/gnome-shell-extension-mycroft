@@ -1,3 +1,5 @@
+Attempt to get this extension working on Ubuntu 22.04
+
 # Mycroft AI Assistant for gnome-shell
 
 This is a gnome-shell-extension for [Mycroft](https://mycroft.ai) AI Assistant. 

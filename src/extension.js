@@ -976,7 +976,7 @@ const MycroftUI = GObject.registerClass({
 
     //this.myUi.core_location = this.mycroftPanel.core_location;
 
-    Main.panel._rightBox.insert_child_at_index(this.mycroftPanel, 1);
+    Main.panel.addToStatusArea('mycroftAi', this.mycroftPanel, 1);
 
     applyStyles();
   }
