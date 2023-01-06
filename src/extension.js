@@ -1144,7 +1144,7 @@ const MycroftPanelButton = GObject.registerClass({
     // Putting the Panel Item together
     let topBox = new St.BoxLayout();
     topBox.add(this._mycroftIcon);
-    this.actor.add_actor(topBox);
+    this.add_child(topBox);
 
     //Not sure what this does
     //let dummyBox = new St.BoxLayout();
