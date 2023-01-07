@@ -95,10 +95,9 @@ gulp.task('clean', function () {
   return deleteAsync([ 'build/*/']);
 });
 
-gulp.task('copy', async function (cb) {
+gulp.task('copy', async function () {
   return gulp.src(paths.src)
     .pipe(gulp.dest('build'));
-    cb();
 });
 gulp.task('copy-icons', async function () {
   return gulp.src('icons/*')
@@ -138,7 +137,7 @@ gulp.task('schemas', function(cb) {shell.task([
 cb();
 });
 
-gulp.task('build', gulp.series(
+gulp.task('build', function(cb) { gulp.series(
       'clean',
       'metadata',
       'schemas',
@@ -148,7 +147,9 @@ gulp.task('build', gulp.series(
       'copy-suggestions',
       'copy-license',
       'sass',  
-));
+  );
+  cb();
+});
 
 gulp.task('watch', gulp.series('build', function () {
   gulp.watch(paths.src, [ 'copy' ]);
