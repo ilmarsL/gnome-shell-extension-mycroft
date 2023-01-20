@@ -24,6 +24,7 @@ const Pango = imports.gi.Pango;
 const Tweener = imports.tweener.tweener;
 const EXTENSIONDIR = Me.dir.get_path();
 const GObject = imports.gi.GObject
+const ByteArray = imports.byteArray;
 
 const MYCROFT_SETTINGS_SCHEMA = 'org.gnome.shell.extensions.mycroft';
 const MYCROFT_POSITION_IN_PANEL_KEY = 'position-in-panel';
@@ -2186,7 +2187,7 @@ const SuggestionsBox = GObject.registerClass({
     let keywordFileTemp, listFileTemp;
     let path = EXTENSIONDIR + '/suggestions/words1.txt';
     let wordlist = this.readFile(path);
-    this.wordListArray = wordlist.toString().split('\n');
+    this.wordListArray = ByteArray.toString(wordlist).split('\n');
     this.wordListArray = this.wordListArray.filter(Boolean);
     let baseLocation = EXTENSIONDIR + '/suggestions/';
     let files = [
@@ -2223,11 +2224,11 @@ const SuggestionsBox = GObject.registerClass({
     ];
     for (let i = 0; i < files.length; i++) {
       keywordFileTemp = this.readFile(files[i].keywordFile);
-      keywordFileTemp = keywordFileTemp.toString().split('\n');
+      keywordFileTemp = ByteArray.toString(keywordFileTemp).toString().split('\n');
       keywordFileTemp = keywordFileTemp.filter(Boolean);
       files[i].keywordFile = keywordFileTemp;
       listFileTemp = this.readFile(files[i].listFile);
-      listFileTemp = listFileTemp.toString().split('\n');
+      listFileTemp = ByteArray.toString(listFileTemp).split('\n');
       listFileTemp = listFileTemp.filter(Boolean);
       files[i].listFile = listFileTemp;
     }
