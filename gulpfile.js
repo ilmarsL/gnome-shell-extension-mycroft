@@ -7,8 +7,7 @@ import gulpSass from 'gulp-sass'
 const sass = gulpSass(dartSass)
 
 
-import { deleteSync } from 'del'
-import { deleteAsync } from 'del'
+import {deleteSync} from 'del'
 import {execSync} from 'child_process'
 import osenv from 'osenv'
 import path from 'path'
@@ -91,28 +90,29 @@ gulp.task('sass', async function () {
     .pipe(gulp.dest('build'));
 });
 
-gulp.task('clean', function () {
-  return deleteAsync([ 'build/*/']);
+gulp.task('clean', function (cb) {
+   let deleted = deleteSync([ 'build/**', '!build']);
+   cb();
 });
 
-gulp.task('copy', async function () {
+gulp.task('copy', function () {
   return gulp.src(paths.src)
     .pipe(gulp.dest('build'));
 });
-gulp.task('copy-icons', async function () {
+gulp.task('copy-icons', function () {
   return gulp.src('icons/*')
     .pipe(gulp.dest('build/icons'));
 });
-gulp.task('copy-suggestions', async function () {
+gulp.task('copy-suggestions', function () {
   return gulp.src('suggestions/*')
     .pipe(gulp.dest('build/suggestions'));
 });
-gulp.task('copy-scripts', async function () {
+gulp.task('copy-scripts', function () {
   return gulp.src('shellscripts/*.sh')
     .pipe(gulp.dest('build/shellscripts'));
 });
 
-gulp.task('copy-license', async function () {
+gulp.task('copy-license', function () {
   return gulp.src([ 'LICENSE' ])
     .pipe(gulp.dest('build'));
 });
@@ -137,7 +137,7 @@ gulp.task('schemas', function(cb) {shell.task([
 cb();
 });
 
-gulp.task('build', function(cb) { gulp.series(
+gulp.task('build',  gulp.series(
       'clean',
       'metadata',
       'schemas',
@@ -146,10 +146,8 @@ gulp.task('build', function(cb) { gulp.series(
       'copy-icons',
       'copy-suggestions',
       'copy-license',
-      'sass',  
-  );
-  cb();
-});
+      'sass',
+));
 
 gulp.task('watch', gulp.series('build', function () {
   gulp.watch(paths.src, [ 'copy' ]);
@@ -182,9 +180,21 @@ gulp.task('install-link', gulp.series('uninstall', 'build' , function () {
 gulp.task('deploy', async function(){
   return gulp.src('build/**/*')
     .pipe(gulp.dest(paths.install));
-})
+});
 
-gulp.task('install', gulp.series('uninstall', 'build' , 'deploy'));
+gulp.task('install', gulp.series( 
+  'uninstall',
+  'clean',
+  'metadata',
+  'schemas',
+  'copy',
+  'copy-scripts',
+  'copy-icons',
+  'copy-suggestions',
+  'copy-license',
+  'sass',
+  'deploy')
+);
 
 gulp.task('require-clean-wd', function (cb) {
   var count = execSync('git status --porcelain | wc -l').toString().replace(/\n$/, '');
