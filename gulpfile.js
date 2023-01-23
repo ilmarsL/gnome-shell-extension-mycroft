@@ -130,12 +130,11 @@ gulp.task('metadata', async function () {
     .pipe(gulp.dest('build'));
 });
 
-gulp.task('schemas', function(cb) {shell.task([
-  'mkdir -p build/schemas',
-  'glib-compile-schemas --strict --targetdir build/schemas src/schemas/',
-])
-cb();
-});
+gulp.task('schemas', shell.task([
+    'mkdir -p build/schemas',
+    'glib-compile-schemas --strict --targetdir build/schemas src/schemas/',
+  ])  
+);
 
 gulp.task('build',  gulp.series(
       'clean',

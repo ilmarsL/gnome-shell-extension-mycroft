@@ -68,46 +68,56 @@ function getMixerControl() {
 const MycroftServiceManager = GObject.registerClass(
   {
     GTypeName: 'MycroftServiceManager',
+    Signals: {
+      'mycroft-service-clicked': {},
+      'send-message': {},
+      'mycroft-animation-stop': {
+        param_types: [GObject.TYPE_STRING],
+      },
+      'mycroft-status': {
+        param_types: [GObject.TYPE_STRING],
+      },
+    },
   }, class MycroftServiceManager extends PopupMenu.PopupBaseMenuItem{
     constructor() {
+      super();
       this.wsStarted = false;
-    this.loadConfig();
-    const msm = this;
-    position_in_panel = this._position_in_panel;
-    core_location = this.core_location;
-    mycroft_is_install = this.mycroft_is_install;
-    install_type = this.install_type;
-    animation_status = this.animation_status;
-    this.setEventListeners();
-    if (mycroft_is_install) {
-      this.emitServiceStatus('install');
-    }
-    _timeoutId = Mainloop.timeout_add(2000, Lang.bind(this, function () {
-      this.getServiceStatus(Lang.bind(this, function (status) {
-        if (status === 'active') {
-          this.emitServiceStatus('starting');
-          if (_timeoutId !== 0) {
-            Mainloop.source_remove(_timeoutId);
+      this.loadConfig();
+      const msm = this;
+      position_in_panel = this._position_in_panel;
+      core_location = this.core_location;
+      mycroft_is_install = this.mycroft_is_install;
+      install_type = this.install_type;
+      animation_status = this.animation_status;
+      this.setEventListeners();
+      if (mycroft_is_install) {
+        this.emitServiceStatus('install');
+      }
+      _timeoutId = Mainloop.timeout_add(2000, Lang.bind(this, function () {
+        this.getServiceStatus(Lang.bind(this, function (status) {
+          if (status === 'active') {
+            this.emitServiceStatus('starting');
+            if (_timeoutId !== 0) {
+              Mainloop.source_remove(_timeoutId);
+            }
+            _timeoutId = Mainloop.timeout_add(1000, Lang.bind(this, function () {
+              msm.initWS();
+              _timeoutId = 0;
+            }));
+          } else if (status === 'disabled' || status === 'failed') {
+            this.emitServiceStatus('disabled');
+          } else if (status === 'install') {
+          // do nothing
+          } else if (status === 'remote') {
+            this.emitServiceStatus('starting');
+            _timeoutId = Mainloop.timeout_add(6000, Lang.bind(this, function () {
+              msm.initWS();
+              _timeoutId = 0;
+            }));
           }
-          _timeoutId = Mainloop.timeout_add(1000, Lang.bind(this, function () {
-            msm.initWS();
-            _timeoutId = 0;
-          }));
-        } else if (status === 'disabled' || status === 'failed') {
-          this.emitServiceStatus('disabled');
-        } else if (status === 'install') {
-        // do nothing
-        } else if (status === 'remote') {
-          this.emitServiceStatus('starting');
-          _timeoutId = Mainloop.timeout_add(6000, Lang.bind(this, function () {
-            msm.initWS();
-            _timeoutId = 0;
-          }));
-        }
-      }));
-      _timeoutId = 0;
-    }));
-      super()
+        }));
+        _timeoutId = 0;
+      }));    
     }
     setEventListeners() {
       this.serviceClicked = this.connect(
@@ -964,7 +974,7 @@ const MycroftUI = GObject.registerClass({
 }, class MycroftUI extends GObject.Object{
   constructor() {
     super();
-    //this.mycroftService = new MycroftServiceManager();
+    this.mycroftService = new MycroftServiceManager();
 
     this.mycroftPanel = new MycroftPanelButton();
    
@@ -995,13 +1005,14 @@ const MycroftUI = GObject.registerClass({
       'mycroft-status',
       Lang.bind(this, this.updateStatus)
     );
-
+    */
     this.myUiTopMenuBarServiceActorClickId = this.myUi.topMenuBar.serviceActor.connect(
       'clicked',
       Lang.bind(this.mycroftService, function () {
         this.emit('mycroft-service-clicked');
       })
     );
+    /*
     this.mycroftServiceMycroftAnimationStartId = this.mycroftService.connect(
       'mycroft-animation-start',
       Lang.bind(
