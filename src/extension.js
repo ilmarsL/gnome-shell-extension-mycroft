@@ -1169,16 +1169,16 @@ const MycroftPanelButton = GObject.registerClass({
     case MycroftPosition.LEFT:
       children = Main.panel._leftBox.get_children();
       childrenL = children.length > 0 ? children.length : 0;
-      Main.panel._leftBox.insert_child_at_index(this.actor, childrenL);
+      Main.panel._leftBox.insert_child_at_index(this, childrenL);
       break;
     case MycroftPosition.CENTER:
       children = Main.panel._centerBox.get_children();
       childrenL = children.length > 0 ? children.length : 0;
-      Main.panel._centerBox.insert_child_at_index(this.actor, childrenL);
+      Main.panel._centerBox.insert_child_at_index(this, childrenL);
       break;
     case MycroftPosition.RIGHT:
       children = Main.panel._rightBox.get_children();
-      Main.panel._rightBox.insert_child_at_index(this.actor, 0);
+      Main.panel._rightBox.insert_child_at_index(this, 0);
       break;
     default:
       // do nothing
