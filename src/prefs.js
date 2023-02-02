@@ -65,8 +65,8 @@ const MycroftPrefsWidget = new GObject.Class({
     this.entryPortNumber = this.Window.get_object('port_number');
     this.labelIpAddress = this.Window.get_object('label-ip-address');
     this.labelPortNumber = this.Window.get_object('label-port-number');
-    this.buttonFileChooser.set_current_folder(this.core_location);
-    this.selectFolderWidget.set_current_folder(this.core_location);
+    //this.buttonFileChooser.set_current_folder(this.core_location);
+    //this.selectFolderWidget.set_current_folder(this.core_location);
     this.installType.set_active(this.install_type);
     let theObjects = this.Window.get_objects();
     for (let i in theObjects) {
@@ -89,9 +89,9 @@ const MycroftPrefsWidget = new GObject.Class({
     this.installType.connect('changed', Lang.bind(this, function () {
       this.setMycroftCore(true);
     }));
-    this.installType.connect('draw', Lang.bind(this, function () {
-      this.setMycroftCore();
-    }));
+    //this.installType.connect('draw', Lang.bind(this, function () {
+    //  this.setMycroftCore();
+    //}));
     this.buttonInstall.connect('clicked', Lang.bind(this, function () {
       this.isInstalled.show();
     }));
@@ -104,17 +104,17 @@ const MycroftPrefsWidget = new GObject.Class({
       this.isInstalled.hide();
     }));
     this.currentFolder;
-    this.selectFolderOk.connect('clicked', Lang.bind(this, function () {
-      this.setCoreFolder(this.selectFolderWidget.get_current_folder());
-      this.selectFolderWidget.close();
-    }));
-    this.selectFolderCancel.connect('clicked', Lang.bind(this, function () {
-      this.selectFolderWidget.close();
-    }));
-    this.buttonFileChooser.connect('button-press-event', Lang.bind(this, function () {
-      this.selectFolderWidget.set_current_folder(MYCROFT_CORE_LOCATION_KEY);
-      this.buttonFileChooser.set_current_folder(this.currentFolder);
-    }));
+    //this.selectFolderOk.connect('clicked', Lang.bind(this, function () {
+    //  this.setCoreFolder(this.selectFolderWidget.get_current_folder());
+    //  this.selectFolderWidget.close();
+    //}));
+    //this.selectFolderCancel.connect('clicked', Lang.bind(this, function () {
+    //  this.selectFolderWidget.close();
+    //}));
+    //this.buttonFileChooser.connect('button-press-event', Lang.bind(this, function () {
+    //  this.selectFolderWidget.set_current_folder(MYCROFT_CORE_LOCATION_KEY);
+    //  this.buttonFileChooser.set_current_folder(this.currentFolder);
+    //}));
   },
   openUrl: function () {
     var a = new GLib.TimeVal();
@@ -347,6 +347,6 @@ function init() {
 function buildPrefsWidget() {
   let prefs = new MycroftPrefsWidget();
   let widget = prefs.mainWidget;
-  widget.show_all();
+  //widget.show_all();
   return widget;
 }
