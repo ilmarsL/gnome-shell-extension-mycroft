@@ -973,6 +973,7 @@ const MycroftUI = GObject.registerClass({
   GTypeName: 'MycroftUI',
 }, class MycroftUI extends GObject.Object{
   constructor() {
+    log('MycroftUI constructor started');
     super();
     this.mycroftService = new MycroftServiceManager();
 
@@ -983,15 +984,17 @@ const MycroftUI = GObject.registerClass({
     this.myUi = new MycroftPopup();
     this.setEventListeners();
 
-    //this.mycroftPanel.menu.addMenuItem(this.myUi.popupMenuMain);
+    this.mycroftPanel.menu.addMenuItem(this.myUi.popupMenuMain);
 
-    //this.myUi.core_location = this.mycroftPanel.core_location;
+    this.myUi.core_location = this.mycroftPanel.core_location;
 
     Main.panel.addToStatusArea('mycroftAi', this.mycroftPanel, 1);
 
     applyStyles();
+    log('MycroftUI constructor finished');
   }
   setEventListeners() {
+    log('MycroftUI setEventListeners() started');
     // Service Status Connect
     /*
     this.mycroftServiceSettingsChangedId = this.mycroftService.connect(
@@ -2868,6 +2871,7 @@ function enable() {
     miPanel = null;
   }
   miPanel = new MycroftUI();
+  log('enable() finsished');
 }
 
 function disable() {
