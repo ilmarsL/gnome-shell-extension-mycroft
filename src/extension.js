@@ -217,7 +217,7 @@ const MycroftServiceManager = GObject.registerClass(
       if (mycroft_is_install && install_type != 2) {
         try {
           let [ res, out, standard_error, exit_status ] = GLib.spawn_command_line_sync(EXTENSIONDIR + '/shellscripts/serviceStatus.sh');
-          log(out, exit_status);
+          log(ByteArray.toString(out), exit_status);
           if (out.length > 1) {
             // outStr = out.toString();
             if (
