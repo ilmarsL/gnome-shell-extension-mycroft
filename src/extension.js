@@ -1137,7 +1137,6 @@ const MycroftPanelButton = GObject.registerClass({
   
 
   constructor() {
-    
     let menuAlignment = 1.0 - 50 / 100; // 50 is location
     if (Clutter.get_default_text_direction() === Clutter.TextDirection.RTL) {
       menuAlignment = 1.0 - menuAlignment;
@@ -1149,9 +1148,7 @@ const MycroftPanelButton = GObject.registerClass({
     this._mycroftIcon = new St.Icon({
       gicon: gicon,
       style_class: 'system-status-icon mycroft-icon',
-    });
-
-    
+    });    
 
     // Putting the Panel Item together
     let topBox = new St.BoxLayout();
@@ -1164,21 +1161,21 @@ const MycroftPanelButton = GObject.registerClass({
     //dummyBox.remove_actor(this.actor);
     //dummyBox.destroy();
     let children = null,
-      childrenL = 0;
+    childrenL = 0;
     switch (this._position_in_panel) {
     case MycroftPosition.LEFT:
       children = Main.panel._leftBox.get_children();
       childrenL = children.length > 0 ? children.length : 0;
-      Main.panel._leftBox.insert_child_at_index(this, childrenL);
+      Main.panel._leftBox.insert_child_at_index(this.container, childrenL);
       break;
     case MycroftPosition.CENTER:
       children = Main.panel._centerBox.get_children();
       childrenL = children.length > 0 ? children.length : 0;
-      Main.panel._centerBox.insert_child_at_index(this, childrenL);
+      Main.panel._centerBox.insert_child_at_index(this.container, childrenL);
       break;
     case MycroftPosition.RIGHT:
       children = Main.panel._rightBox.get_children();
-      Main.panel._rightBox.insert_child_at_index(this, 0);
+      Main.panel._rightBox.insert_child_at_index(this.container, 0);
       break;
     default:
       // do nothing
