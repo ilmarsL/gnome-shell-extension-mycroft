@@ -2088,7 +2088,8 @@ const TopMenuBar = GObject.registerClass({
   Signals: {
     'mycroft-status' : {
       param_types: [GObject.TYPE_STRING],
-    } 
+    },
+    'mycroft-service-clicked': {}, 
   }},
   class TopMenuBar extends PopupMenu.PopupBaseMenuItem{
   constructor() {

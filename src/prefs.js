@@ -32,21 +32,20 @@ const MycroftInstallType = {
   REMOTE: 4,
 };
 
-const MycroftPrefsWidget = new GObject.Class({
+const MycroftPrefsWidget =  GObject.registerClass({
   Name: 'MycroftExtension.Prefs.Widget',
   GTypeName: 'MycroftExtensionPrefsWidget',
-  Extends: Gtk.Box,
-  _init: function (params) {
-    this.parent(params);
+  }, class MycroftPrefsWidget extends Gtk.Window{
 
+  constructor() {
+    super();
+    this._configWidgets = [];
+    this.Window = new Gtk.Builder();
     this.initWindow();
+    this.refreshUI();    
+  }  
 
-    this.refreshUI();
-  },
-
-  Window: new Gtk.Builder(),
-
-  initWindow: function () {
+  initWindow() {
     this.Window.add_from_file(EXTENSIONDIR + '/mycroft-settings.ui');
     this.mainWidget = this.Window.get_object('mycroft-pref');
     this.isInstalled = this.Window.get_object('isInstalled');
@@ -66,7 +65,8 @@ const MycroftPrefsWidget = new GObject.Class({
     this.labelIpAddress = this.Window.get_object('label-ip-address');
     this.labelPortNumber = this.Window.get_object('label-port-number');
     //this.buttonFileChooser.set_current_folder(this.core_location);
-    //this.selectFolderWidget.set_current_folder(this.core_location);
+    const core_loc = Gio.File.new_for_path(this.core_location);
+    this.selectFolderWidget.set_current_folder(core_loc);
     this.installType.set_active(this.install_type);
     let theObjects = this.Window.get_objects();
     for (let i in theObjects) {
@@ -83,7 +83,7 @@ const MycroftPrefsWidget = new GObject.Class({
         } else if (theObjects[i].class_path()[1].indexOf('GtkSwitch') != -1) {
           this.initSwitch(theObjects[i]);
         }
-        this.configWidgets.push([ theObjects[i], name ]);
+        this._configWidgets.push([ theObjects[i], name ]);
       }
     }
     this.installType.connect('changed', Lang.bind(this, function () {
@@ -104,19 +104,21 @@ const MycroftPrefsWidget = new GObject.Class({
       this.isInstalled.hide();
     }));
     this.currentFolder;
-    //this.selectFolderOk.connect('clicked', Lang.bind(this, function () {
-    //  this.setCoreFolder(this.selectFolderWidget.get_current_folder());
-    //  this.selectFolderWidget.close();
-    //}));
+    this.selectFolderOk.connect('clicked', Lang.bind(this, function () {
+      this.setCoreFolder(this.selectFolderWidget.get_current_folder());
+      this.selectFolderWidget.close();
+    }));
     //this.selectFolderCancel.connect('clicked', Lang.bind(this, function () {
     //  this.selectFolderWidget.close();
     //}));
-    //this.buttonFileChooser.connect('button-press-event', Lang.bind(this, function () {
-    //  this.selectFolderWidget.set_current_folder(MYCROFT_CORE_LOCATION_KEY);
-    //  this.buttonFileChooser.set_current_folder(this.currentFolder);
-    //}));
-  },
-  openUrl: function () {
+    this.buttonFileChooser.connect('clicked', () => {
+      this.selectFolderWidget.set_transient_for(this);
+      this.selectFolderWidget.set_current_folder(core_loc);
+      this.selectFolderWidget.show();
+      this.selectFolderWidget.present();
+    });
+  }
+  openUrl() {
     var a = new GLib.TimeVal();
     let o = GLib.get_current_time(a);
     let url = 'https://github.com/MycroftAI/mycroft-core/';
@@ -126,32 +128,32 @@ const MycroftPrefsWidget = new GObject.Class({
       let title = _('Can not open %s').format(url);
       log(err.message);
     }
-  },
-  runScript: function () {
+  }
+  runScript() {
     var e;
     try {
       let [ res, out ] = GLib.spawn_command_line_async('gnome-terminal -e ' + EXTENSIONDIR + '/shellscripts/packageInstall.sh');
     } catch (e) {
       throw e;
     }
-  },
-  setCoreFolder: function (v) {
+  }
+  setCoreFolder(v) {
     this.currentFolder = v;
     this.selectFolderWidget.set_current_folder(this.currentFolder);
     this.buttonFileChooser.set_current_folder(this.currentFolder);
     this.core_location = this.currentFolder;
-  },
-  getCoreFolder: function () {
+  }
+  getCoreFolder() {
     return location();
-  },
+  }
 
-  loadConfig: function () {
+  loadConfig() {
     this.Settings = Convenience.getSettings(MYCROFT_SETTINGS_SCHEMA);
     this.Settings.connect('changed', Lang.bind(this, function () {
       this.refreshUI();
     }));
-  },
-  setMycroftCore: function (fl) {
+  }
+  setMycroftCore(fl) {
     if (fl) {
       this.install_type = this.installType.get_active();
     }
@@ -210,8 +212,8 @@ const MycroftPrefsWidget = new GObject.Class({
     default:
                 // donothing
     }
-  },
-  initEntry: function (theEntry) {
+  }
+  initEntry(theEntry) {
     let name = theEntry.get_name();
 
     theEntry.text = this[name];
@@ -220,122 +222,122 @@ const MycroftPrefsWidget = new GObject.Class({
       let key = arguments[0].text;
       this[name] = key;
     }));
-  },
-  initFileChooser: function (theFileChooser) {
+  }
+  initFileChooser(theFileChooser) {
     let name = theFileChooser.get_name();
     theFileChooser.connect('changed', Lang.bind(this, function () {
       this[name] = this.set_current_folder('/home/$USER/Mycroft-core');
     }));
-  },
+  }
 
-  initComboBox: function (theComboBox) {
+  initComboBox(theComboBox) {
     let name = theComboBox.get_name();
     theComboBox.connect('changed', Lang.bind(this, function () {
       this[name] = arguments[0].active;
     }));
-  },
-  initSwitch: function (theSwitch) {
+  }
+  initSwitch(theSwitch) {
     let name = theSwitch.get_name();
     theSwitch.connect('notify::active', Lang.bind(this, function () {
       this[name] = arguments[0].active;
     }));
-  },
-  refreshUI: function () {
-    let config = this.configWidgets;
+  }
+  refreshUI() {
+    let config = this._configWidgets;
     for (let i in config) {
       if (config[i][0].active != this[config[i][1]]) {
         config[i][0].active = this[config[i][1]];
       }
     }
-  },
+  }
 
-  configWidgets: [],
+  
 
   get position_in_panel() {
     if (!this.Settings) {
       this.loadConfig();
     }
     return this.Settings.get_enum(MYCROFT_POSITION_IN_PANEL_KEY);
-  },
+  }
 
   set position_in_panel(v) {
     if (!this.Settings) {
       this.loadConfig();
     }
     this.Settings.set_enum(MYCROFT_POSITION_IN_PANEL_KEY, v);
-  },
+  }
   get animation_status() {
     if (!this.Settings) {
       this.loadConfig();
     }
     return this.Settings.get_boolean(MYCROFT_ANIMATION_STATUS_KEY);
-  },
+  }
   set animation_status(v) {
     if (!this.Settings) {
       this.loadConfig();
     }
     this.Settings.set_boolean(MYCROFT_ANIMATION_STATUS_KEY, v);
-  },
+  }
   get core_location() {
     if (!this.Settings) {
       this.loadConfig();
     }
     return this.Settings.get_string(MYCROFT_CORE_LOCATION_KEY);
-  },
+  }
   set core_location(v) {
     if (!this.Settings) {
       this.loadConfig();
     }
     return this.Settings.set_string(MYCROFT_CORE_LOCATION_KEY, v);
-  },
+  }
   get install_type() {
     if (!this.Settings) {
       this.loadConfig();
     }
     return this.Settings.get_int(MYCROFT_INSTALL_TYPE_KEY);
-  },
+  }
   set install_type(v) {
     if (!this.Settings) {
       this.loadConfig();
     }
     return this.Settings.set_int(MYCROFT_INSTALL_TYPE_KEY, v);
-  },
+  }
   get mycroft_is_install() {
     if (!this.Settings) {
       this.loadConfig();
     }
     return this.Settings.get_boolean(MYCROFT_IS_INSTALL_KEY);
-  },
+  }
   set mycroft_is_install(v) {
     if (!this.Settings) {
       this.loadConfig();
     }
     return this.Settings.set_boolean(MYCROFT_IS_INSTALL_KEY, v);
-  },
+  }
   get ip_address() {
     if (!this.Settings) {
       this.loadConfig();
     }
     return this.Settings.get_string(MYCROFT_IP_ADDRESS_KEY);
-  },
+  }
   set ip_address(v) {
     if (!this.Settings) {
       this.loadConfig();
     }
     return this.Settings.set_string(MYCROFT_IP_ADDRESS_KEY, v);
-  },
+  }
   get port_number() {
     if (!this.Settings) {
       this.loadConfig();
     }
     return this.Settings.get_string(MYCROFT_PORT_NUMBER_KEY);
-  },
+  }
   set port_number(v) {
     if (!this.Settings) {
       this.loadConfig();
     }
     return this.Settings.set_string(MYCROFT_PORT_NUMBER_KEY, v);
-  },
+  }
 
 
 });
