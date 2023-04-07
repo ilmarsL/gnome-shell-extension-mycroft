@@ -6,37 +6,9 @@
   <object class="GtkFileChooserDialog" id="select-folder">
     <property name="can_focus">False</property>
     <property name="action">select-folder</property>
-    <child>
-      <object class="GtkBox">
-        <property name="can_focus">False</property>
-        <property name="orientation">vertical</property>
-        <property name="spacing">2</property>
-        <child internal-child="action_area">
-          <object class="GtkBox">
-            <property name="can_focus">False</property>
-            <child>
-              <object class="GtkButton" id="close-button">
-                <property name="label" translatable="yes">Close</property>
-                <property name="visible">True</property>
-                <property name="can_focus">True</property>
-                <property name="receives_default">True</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkButton" id="ok-button">
-                <property name="label" translatable="yes">Select Folder</property>
-                <property name="visible">True</property>
-                <property name="can_focus">True</property>
-                <property name="receives_default">True</property>
-              </object>
-            </child>
-          </object>
-        </child>
-        <child>
-          <placeholder/>
-        </child>
-      </object>
-    </child>
+    <property name="title">Choose a file</property>
+    <property name="transient-for">mycroft-pref</property>
+
   </object>
 
   

@@ -103,19 +103,27 @@ const MycroftPrefsWidget =  GObject.registerClass({
     this.buttonInstallNo.connect('clicked', Lang.bind(this, function () {
       this.isInstalled.hide();
     }));
-    this.currentFolder;
-    this.selectFolderOk.connect('clicked', Lang.bind(this, function () {
-      this.setCoreFolder(this.selectFolderWidget.get_current_folder());
-      this.selectFolderWidget.close();
-    }));
-    //this.selectFolderCancel.connect('clicked', Lang.bind(this, function () {
-    //  this.selectFolderWidget.close();
-    //}));
+    
     this.buttonFileChooser.connect('clicked', () => {
-      this.selectFolderWidget.set_transient_for(this);
-      this.selectFolderWidget.set_current_folder(core_loc);
-      this.selectFolderWidget.show();
-      this.selectFolderWidget.present();
+    
+      let dialog = new Gtk.FileChooserDialog({
+        title: "Choose a file",
+        action: Gtk.FileChooserAction.SELECT_FOLDER,
+        modal: true,
+        transient_for: this,
+    });
+    dialog.add_button('_Cancel', Gtk.ResponseType.CANCEL);
+    dialog.add_button('_Open', Gtk.ResponseType.OK);
+
+    dialog.connect("response", (dialog, response) => {
+      if (response == Gtk.ResponseType.OK) {
+          let folder = dialog.get_file().get_path();
+          this.setCoreFolder(folder)
+      }
+      dialog.destroy();
+  });
+    
+    dialog.show();
     });
   }
   openUrl() {
@@ -139,8 +147,6 @@ const MycroftPrefsWidget =  GObject.registerClass({
   }
   setCoreFolder(v) {
     this.currentFolder = v;
-    this.selectFolderWidget.set_current_folder(this.currentFolder);
-    this.buttonFileChooser.set_current_folder(this.currentFolder);
     this.core_location = this.currentFolder;
   }
   getCoreFolder() {
