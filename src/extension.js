@@ -558,7 +558,7 @@ const MycroftUI = GObject.registerClass({
     
     this.mycroftServiceSettingsChangedId = this.mycroftService.connect(
       'settings-changed', (uploader) => {
-        this.checkPositionInPanel();
+        this.mycroftPanel.checkPositionInPanel();
       });
       
     this.mycroftServiceStatusId = this.mycroftService.connect(
