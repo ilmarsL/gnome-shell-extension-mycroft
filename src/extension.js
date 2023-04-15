@@ -71,6 +71,9 @@ const MycroftServiceManager = GObject.registerClass(
     Signals: {
       'mycroft-service-clicked': {},
       'send-message': {},
+      'mycroft-animation-start':{
+        param_types: [GObject.TYPE_STRING],
+      },
       'mycroft-animation-stop': {
         param_types: [GObject.TYPE_STRING],
       },
@@ -922,7 +925,7 @@ const SearchBox = GObject.registerClass({
       });
       this.actor.add_actor(this.sBox);
       this.chatBox = new ChatBox();
-      //this.conversationBox = new ConversationBox();
+      this.conversationBox = new ConversationBox();
 
       this.label = new St.Label({
         name: 'basic-text',
@@ -1126,7 +1129,7 @@ const HintBox = GObject.registerClass({
 });
 const ConversationBox = GObject.registerClass({
   GTypeName: 'ConversationBox'},
-  class ConversationBox extends MycroftPopup{ 
+  class ConversationBox extends GObject.Object{ 
   constructor() {
     super();
     this.clearId = 0;
@@ -1140,8 +1143,6 @@ const ConversationBox = GObject.registerClass({
       style_class: 'scroll-view verticalfade',
       x_expand: true,
       y_expand: true,
-      x_fill: true,
-      y_fill: true,
     });
     this._scrollView.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
     this.actor.add_actor(this._scrollView);
@@ -1159,7 +1160,6 @@ const ConversationBox = GObject.registerClass({
       (this._initButton = new St.Button({
         name: 'initButton',
         x_align: Clutter.ActorAlign.START,
-        x_fill: false,
         child: this._initMessage,
       }));
 
