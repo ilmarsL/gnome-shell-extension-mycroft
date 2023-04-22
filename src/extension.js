@@ -70,7 +70,9 @@ const MycroftServiceManager = GObject.registerClass(
     GTypeName: 'MycroftServiceManager',
     Signals: {
       'mycroft-service-clicked': {},
-      'send-message': {},
+      'send-message': {
+        param_types: [GObject.TYPE_STRING],
+      },
       'mycroft-animation-start':{
         param_types: [GObject.TYPE_STRING],
       },
@@ -81,6 +83,9 @@ const MycroftServiceManager = GObject.registerClass(
         param_types: [GObject.TYPE_STRING],
       },
       'settings-changed': {},
+      'message-recieved': {
+        param_types: [GObject.TYPE_STRING, GObject.TYPE_STRING]
+      },
     },
   }, class MycroftServiceManager extends PopupMenu.PopupBaseMenuItem{
     constructor() {
@@ -535,7 +540,6 @@ const MycroftUI = GObject.registerClass({
   }
 }, class MycroftUI extends GObject.Object{
   constructor() {
-    log('MycroftUI constructor started');
     super();
     this.mycroftService = new MycroftServiceManager();
 
@@ -553,10 +557,8 @@ const MycroftUI = GObject.registerClass({
     Main.panel.addToStatusArea('mycroftAi', this.mycroftPanel, 1);
 
     applyStyles();
-    log('MycroftUI constructor finished');
   }
   setEventListeners() {
-    log('MycroftUI setEventListeners() started');
     // Service Status Connect
     
     this.mycroftServiceSettingsChangedId = this.mycroftService.connect(
@@ -575,7 +577,7 @@ const MycroftUI = GObject.registerClass({
         this.emit('mycroft-service-clicked');
       })
     );
-    /*
+    
     this.mycroftServiceMycroftAnimationStartId = this.mycroftService.connect(
       'mycroft-animation-start',
       Lang.bind(
@@ -583,6 +585,7 @@ const MycroftUI = GObject.registerClass({
         this.myUi.displayBox.searchBox.barAnimation.startAnimation
       )
     );
+    
     this.mycroftServiceMycroftAnimationStopId = this.mycroftService.connect(
       'mycroft-animation-stop',
       Lang.bind(
@@ -590,16 +593,19 @@ const MycroftUI = GObject.registerClass({
         this.myUi.displayBox.searchBox.barAnimation.stopAnimation
       )
     );
+    
     this.myUiDisplayBoxSearchBoxChatBoxSendMessageId = this.myUi.displayBox.searchBox.chatBox.connect(
       'send-message',
       Lang.bind(this, function (uploader, message) {
         this.mycroftService.emit('send-message', message);
       })
     );
+    
     this.myUiTopMenuBarHintActorClickedId = this.myUi.topMenuBar.hintActor.connect(
       'clicked',
       Lang.bind(this.myUi.displayBox, this.myUi.displayBox.showPage)
     );
+    
     this.myUiTopMenuBarSearchActorClickedId = this.myUi.topMenuBar.searchActor.connect(
       'clicked',
       Lang.bind(this.myUi.displayBox, this.myUi.displayBox.showPage)
@@ -612,6 +618,7 @@ const MycroftUI = GObject.registerClass({
         this.myUi.displayBox.searchBox.conversationBox.addMessage
       )
     );
+    
     this.myUiTopMenuBarSettingsActorClickedId = this.myUi.topMenuBar.settingsActor.connect(
       'clicked',
       Lang.bind(this.mycroftPanel, function () {
@@ -620,7 +627,6 @@ const MycroftUI = GObject.registerClass({
         return 0;
       })
     );
-    */
   }
   updateStatus(uploader, status) {
     this.myUi.displayBox.searchBox.updateStatus(status);
@@ -1227,7 +1233,13 @@ const ConversationBox = GObject.registerClass({
 });
 
 const ChatBox = GObject.registerClass({
-  GTypeName: 'ChatBox'},
+  GTypeName: 'ChatBox',
+  Signals: {
+      'send-message': {
+        param_types: [GObject.TYPE_STRING],
+      },
+    },
+  },
   class ChatBox extends PopupMenu.PopupBaseMenuItem {
   constructor() {
     super();
@@ -1252,6 +1264,20 @@ const ChatBox = GObject.registerClass({
       track_hover: true,
       can_focus: true,
     });
+
+    /*
+    let signals = this._entry.list_signals();
+      for (let i = 0; i < signals.length; i++) {
+        log(signals[i]);
+    }
+    */
+
+    //handle enter key
+    this._entry.clutter_text.connect("activate", () => {
+      //this is a temporary fix before fixing _onkeypressed
+      this.sendMessage(this._entry.get_text());
+    });
+
     this._entryBin = new St.Bin({
       child: this._entry,
       x_align: St.Align.MIDDLE,
@@ -1290,19 +1316,18 @@ const ChatBox = GObject.registerClass({
     this.setEventListeners();
   }
   setEventListeners() {
-    //TODO removed for compitability
-    //this.suggestionsClickedId = this._suggestionsResults.connect(
-    //  'suggestions-clicked',
-    //  Lang.bind(this, this.suggestionsClick)
-    //);
-    //this.suggestionsEntryFocusId = this._suggestionsResults.connect(
-    //  'entry-focus',
-    //  Lang.bind(this, this._entryFocus)
-    //);
-    //this.inputStreamId = this.inputStream.connect(
-    //  'stream-status',
-    //  Lang.bind(this, this._isMuted)
-    //);
+    this.suggestionsClickedId = this._suggestionsResults.connect(
+      'suggestions-clicked',
+      Lang.bind(this, this.suggestionsClick)
+    );
+    this.suggestionsEntryFocusId = this._suggestionsResults.connect(
+     'entry-focus',
+      Lang.bind(this, this._entryFocus)
+    );
+    this.inputStreamId = this.inputStream.connect(
+     'stream-status',
+    Lang.bind(this, this._isMuted)
+    );
   }
   destroy() {
     if (this._textChangedId) {
@@ -1474,7 +1499,12 @@ const ChatBox = GObject.registerClass({
   }
 });
 const InputStream = GObject.registerClass({
-  GTypeName: 'InputStream'},
+  GTypeName: 'InputStream',
+  Signals: {
+    'stream-status' : {
+      param_types: [GObject.TYPE_FLOAT],
+    }
+  }},
   class InputStream extends PopupMenu.PopupBaseMenuItem{
   constructor() {
     super();
@@ -1587,7 +1617,13 @@ const InputStream = GObject.registerClass({
   }
 });
 const SuggestionsBox = GObject.registerClass({
-  GTypeName: 'SuggestionsBox'},
+  GTypeName: 'SuggestionsBox',
+  Signals: {
+    'suggestions-clicked': {
+      param_types: [GObject.TYPE_STRING],
+    },
+    'entry-focus': {},
+  }},
   class SuggestionsBox extends PopupMenu.PopupBaseMenuItem {
   constructor() {
     super();
