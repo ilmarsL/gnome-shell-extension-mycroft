@@ -1265,19 +1265,6 @@ const ChatBox = GObject.registerClass({
       can_focus: true,
     });
 
-    /*
-    let signals = this._entry.list_signals();
-      for (let i = 0; i < signals.length; i++) {
-        log(signals[i]);
-    }
-    */
-
-    //handle enter key
-    this._entry.clutter_text.connect("activate", () => {
-      //this is a temporary fix before fixing _onkeypressed
-      this.sendMessage(this._entry.get_text());
-    });
-
     this._entryBin = new St.Bin({
       child: this._entry,
       x_align: St.Align.MIDDLE,
@@ -1477,16 +1464,17 @@ const ChatBox = GObject.registerClass({
     }
   }
   _onKeyPress(entry, event) {
+  
     let symbol = event.get_key_symbol();
     if (symbol === Clutter.Escape) {
       if (this._isActivated()) {
         this.reset();
         return Clutter.EVENT_STOP;
       }
-    } else if (symbol === Clutter.Up) {
+    } else if (symbol === Clutter.Up || symbol === Clutter.KEY_Up) {
       this._suggestionsResults.suggestFirstButton.grab_key_focus();
       return Clutter.EVENT_STOP;
-    } else if (symbol === Clutter.Return || symbol === Clutter.KP_Enter) {
+    } else if (symbol === Clutter.Return || symbol === Clutter.KP_Enter || symbol === Clutter.KEY_Return) {
       this.sendMessage(this._entry.get_text());
       return Clutter.EVENT_STOP;
     }
