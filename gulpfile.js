@@ -80,7 +80,7 @@ gulp.task('lint', function () {
     }));
 });
 
-gulp.task('sass', async function () {
+gulp.task('sass', function () {
   return gulp.src('sass/*.scss')
     .pipe(sass({
       errLogToConsole: true,
