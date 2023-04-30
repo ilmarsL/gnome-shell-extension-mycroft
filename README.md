@@ -1,4 +1,4 @@
-Attempt to get this extension working on Ubuntu 22.04
+Updated for Ubuntu 22.04. Mostly works.
 
 # Mycroft AI Assistant for gnome-shell
 
