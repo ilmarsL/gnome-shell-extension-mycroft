@@ -21,8 +21,10 @@ const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const Slider = imports.ui.slider;
 const Pango = imports.gi.Pango;
-const Tweener = imports.ui.tweener;
+const Tweener = imports.tweener.tweener;
 const EXTENSIONDIR = Me.dir.get_path();
+const GObject = imports.gi.GObject
+const ByteArray = imports.byteArray;
 
 const MYCROFT_SETTINGS_SCHEMA = 'org.gnome.shell.extensions.mycroft';
 const MYCROFT_POSITION_IN_PANEL_KEY = 'position-in-panel';
@@ -62,457 +64,489 @@ function getMixerControl() {
 
   return _mixerControl;
 }
-const MycroftServiceManager = new Lang.Class({
-  Name: 'MycroftServiceManager',
-  Extends: PopupMenu.PopupBaseMenuItem,
-  _init: function () {
-    this.wsStarted = false;
-    this.loadConfig();
-    const msm = this;
-    position_in_panel = this._position_in_panel;
-    core_location = this.core_location;
-    mycroft_is_install = this.mycroft_is_install;
-    install_type = this.install_type;
-    animation_status = this.animation_status;
-    this.setEventListeners();
-    if (mycroft_is_install) {
-      this.emitServiceStatus('install');
-    }
-    _timeoutId = Mainloop.timeout_add(2000, Lang.bind(this, function () {
-      this.getServiceStatus(Lang.bind(this, function (status) {
-        if (status === 'active') {
-          this.emitServiceStatus('starting');
-          if (_timeoutId !== 0) {
-            Mainloop.source_remove(_timeoutId);
+
+const MycroftServiceManager = GObject.registerClass(
+  {
+    GTypeName: 'MycroftServiceManager',
+    Signals: {
+      'mycroft-service-clicked': {},
+      'send-message': {
+        param_types: [GObject.TYPE_STRING],
+      },
+      'mycroft-animation-start':{
+        param_types: [GObject.TYPE_STRING],
+      },
+      'mycroft-animation-stop': {
+        param_types: [GObject.TYPE_STRING],
+      },
+      'mycroft-status': {
+        param_types: [GObject.TYPE_STRING],
+      },
+      'settings-changed': {},
+      'message-recieved': {
+        param_types: [GObject.TYPE_STRING, GObject.TYPE_STRING]
+      },
+    },
+  }, class MycroftServiceManager extends PopupMenu.PopupBaseMenuItem{
+    constructor() {
+      super();
+      this.wsStarted = false;
+      this.loadConfig();
+      const msm = this;
+      position_in_panel = this._position_in_panel;
+      core_location = this.core_location;
+      mycroft_is_install = this.mycroft_is_install;
+      install_type = this.install_type;
+      animation_status = this.animation_status;
+      this.setEventListeners();
+      if (mycroft_is_install) {
+        this.emitServiceStatus('install');
+      }
+      _timeoutId = Mainloop.timeout_add(2000, Lang.bind(this, function () {
+        this.getServiceStatus(Lang.bind(this, function (status) {
+          if (status === 'active') {
+            this.emitServiceStatus('starting');
+            if (_timeoutId !== 0) {
+              Mainloop.source_remove(_timeoutId);
+            }
+            _timeoutId = Mainloop.timeout_add(1000, Lang.bind(this, function () {
+              msm.initWS();
+              _timeoutId = 0;
+            }));
+          } else if (status === 'disabled' || status === 'failed') {
+            this.emitServiceStatus('disabled');
+          } else if (status === 'install') {
+          // do nothing
+          } else if (status === 'remote') {
+            this.emitServiceStatus('starting');
+            _timeoutId = Mainloop.timeout_add(6000, Lang.bind(this, function () {
+              msm.initWS();
+              _timeoutId = 0;
+            }));
           }
-          _timeoutId = Mainloop.timeout_add(1000, Lang.bind(this, function () {
-            msm.initWS();
-            _timeoutId = 0;
-          }));
-        } else if (status === 'disabled' || status === 'failed') {
-          this.emitServiceStatus('disabled');
-        } else if (status === 'install') {
-        // do nothing
-        } else if (status === 'remote') {
-          this.emitServiceStatus('starting');
-          _timeoutId = Mainloop.timeout_add(6000, Lang.bind(this, function () {
-            msm.initWS();
-            _timeoutId = 0;
-          }));
-        }
-      }));
-      _timeoutId = 0;
-    }));
-  },
-  setEventListeners: function () {
-    this.serviceClicked = this.connect(
-      'mycroft-service-clicked',
-      Lang.bind(this, function () {
-        if (!this.locked) {
-          this.locked = true;
-          this.initWS();
-          this.getServiceStatus(
-            Lang.bind(this, function (status) {
-              if (status === 'active' || status === 'listening') {
-                this.stopService();
-              } else if (status === 'disabled' || status === 'failed') {
-                this.startService();
-              } else if (status === 'install') {
-                // do nothing;
-              } else if (status === 'remote') {
-                if (!this.wsStarted) {
-                  this.emitServiceStatus('starting');
-                  _timeoutId = Mainloop.timeout_add(
-                    8000,
-                    Lang.bind(this, function () {
-                      this.initWS();
-                      _timeoutId = 0;
+        }));
+        _timeoutId = 0;
+      }));    
+    }
+    setEventListeners() {
+      this.serviceClicked = this.connect(
+        'mycroft-service-clicked',
+        Lang.bind(this, function () {
+          if (!this.locked) {
+            this.locked = true;
+            this.initWS();
+            this.getServiceStatus(
+              Lang.bind(this, function (status) {
+                if (status === 'active' || status === 'listening') {
+                  this.stopService();
+                } else if (status === 'disabled' || status === 'failed') {
+                  this.startService();
+                } else if (status === 'install') {
+                  // do nothing;
+                } else if (status === 'remote') {
+                  if (!this.wsStarted) {
+                    this.emitServiceStatus('starting');
+                    _timeoutId = Mainloop.timeout_add(
+                      8000,
+                      Lang.bind(this, function () {
+                        this.initWS();
+                        _timeoutId = 0;
+                      })
+                    );
+                  } else {
+                    this.emitServiceStatus('disabled');
+                    this.closeSocket();
+                  }
+                }
+              })
+            );
+          } else {
+            // locked
+            log('locked.');
+          }
+        })
+      );
+      this.sendMessageId = this.connect(
+        'send-message',
+        Lang.bind(this, function (uploader, message) {
+          this.sendMessage(message);
+        })
+      );
+    }
+    startService() {
+      if (_timeoutId !== 0) {
+        Mainloop.source_remove(_timeoutId);
+      }
+      this.getServiceStatus(
+        Lang.bind(this, function (status) {
+          if (status === 'disabled' || status === 'failed') {
+            try {
+              GLib.spawn_command_line_async(
+                core_location + '/start-mycroft.sh all'
+              );
+              this.emitServiceStatus('starting');
+              _timeoutId = Mainloop.timeout_add(
+                5000,
+                Lang.bind(this, function () {
+                  this.getServiceStatus(
+                    Lang.bind(this, function (status) {
+                      if (status === 'active') {
+                        _timeoutId = Mainloop.timeout_add(
+                          5000,
+                          Lang.bind(this, function () {
+                            this.initWS();
+                          })
+                        );
+                      }
                     })
                   );
-                } else {
-                  this.emitServiceStatus('disabled');
-                  this.closeSocket();
+                  _timeoutId = 0;
+                })
+              );
+            } catch (e) {
+              log('Mycroft UI - Start Service' + e);
+            }
+          }
+        })
+      );
+    }
+    stopService(callback) {
+      this.emitServiceStatus('stopping');
+      try {
+        GLib.spawn_command_line_async(core_location + '/stop-mycroft.sh');
+        this.closeSocket();
+        this.wsStarted = false;
+      } catch (e) {
+        log('Mycroft UI - Stop Service' + e);
+      }
+      this.emitServiceStatus('disabled');
+    }
+    getServiceStatus(callback) {
+      let e, outStr;
+      if (mycroft_is_install && install_type != 2) {
+        try {
+          let [ res, out, standard_error, exit_status ] = GLib.spawn_command_line_sync(EXTENSIONDIR + '/shellscripts/serviceStatus.sh');
+          log(ByteArray.toString(out), exit_status);
+          if (out.length > 1) {
+            // outStr = out.toString();
+            if (
+              !exit_status
+            ) {
+              if (this.wsStarted) {
+                this.emitServiceStatus('active');
+              } else {
+                this.emitServiceStatus('starting');
+              }
+              callback('active');
+            } else {
+              callback('disabled');
+            }
+          } else {
+            callback('disabled');
+          }
+        } catch (err) {
+          log('Mycroft UI - Get Service Status' + err);
+        }
+      } else if (install_type == 2) {
+        callback('remote');
+      } else {
+        this.emitServiceStatus('install');
+        callback('install');
+      }
+    }
+    initWS() {
+      this.user_agent = Me.metadata.uuid;
+      if (
+        Me.metadata.version !== undefined &&
+        Me.metadata.version.toString().trim() !== ''
+      ) {
+        this.user_agent += '/';
+        this.user_agent += Me.metadata.version.toString();
+      }
+      this.user_agent += ' ';
+      if (!this.wsStarted && mycroft_is_install) {
+        // if (socketClient === undefined) {
+        //  socketClient = new Soup.Session();
+        //  socketClient.user_agent = this.user_agent;
+        // } else {
+        //  // abort previous requests.
+        //  socketClient.abort();
+        //  socketClient = new Soup.Session();
+        // }
+        // let proxy = new Soup.ProxyResolverDefault();
+        // Soup.Session.prototype.add_feature.call(socketClient, proxy);
+  
+        socketClient.httpsAliases = [ 'wss' ];
+        let message = new Soup.Message({
+          method: 'GET',
+          uri: new Soup.URI(
+            'ws://' + this.ip_address + ':' + this.port_number + '/core'
+          ),
+        });
+        try {
+          socketClient.websocket_connect_async(
+            message,
+            null,
+            null,
+            null,
+            Lang.bind(this, function (session, result) {
+              try {
+                this.connection = session.websocket_connect_finish(result);
+                if (this.connection !== null) {
+                  this.connection.connect(
+                    'message',
+                    Lang.bind(this, this.onMessage)
+                  );
+  
+                  this.connection.connect(
+                    'closed',
+                    Lang.bind(this, function (connection) {
+                      this.onClosed(connection);
+                    })
+                  );
+  
+                  this.wsStarted = true;
+                }
+              } catch (e) {
+                if (this.install_type == 2) {
+                  this.emitServiceStatus('remote-error');
+                }
+                this.emitServiceStatus('failed');
+              }
+            })
+          );
+        } catch (e) {
+          log('Mycroft UI - Init Websocket' + e);
+        }
+      }
+      this.locked = false;
+    }
+    onMessage(connection, type, message) {
+      let data = JSON.parse(message.get_data());
+      if (data.type === 'connected') {
+        this.emitServiceStatus('active'); // Active();
+      } else if (data.type === 'speak') {
+        this.emit('message-recieved', data.data.utterance, 'mycroft');
+      } else if (data.type === 'mycroft.not.paired') {
+        //
+      } else if (data.type === 'recognizer_loop:audio_output_start') {
+        this.emitAnimationStatus('audio_output_start');
+      } else if (data.type === 'recognizer_loop:audio_output_end') {
+        this.emitAnimationStatus('audio_output_stop');
+      } else if (data.type === 'enclosure.weather.display') {
+        // log('show Weather Panel');
+      } else if (data.type === 'configuration.updated') {
+        this.wsStarted = true;
+      } else if (data.type === 'recognizer_loop:record_begin') {
+        this.emitServiceStatus('listening');
+      } else if (data.type === 'recognizer_loop:record_end') {
+        this.emitServiceStatus('active');
+      } else if (data.type === 'configuration.updated') {
+        // later
+      } else if (data.type === 'recognizer_loop:utterance') {
+        this.emit('message-recieved', data.data.utterances[0], 'me');
+      } else if (data.type === 'intent_failure') {
+        // this.emit('message-recieved', 'Sorry I didn\'t understand you. Please rephrase or ask another question','mycroft');
+      }
+    }
+    onClosing(connection) {}
+    onClosed(connection) {
+      this.wsStarted = false;
+      // connection.close(Soup.WebsocketCloseCode.NORMAL, "");
+      if (_timeoutId !== 0) {
+        Mainloop.source_remove(_timeoutId);
+      }
+  
+      _timeoutId = Mainloop.timeout_add(
+        6000,
+        Lang.bind(this, function () {
+          this.getServiceStatus(
+            Lang.bind(this, function (status) {
+              if (status === 'active') {
+                _timeoutId = Mainloop.timeout_add(
+                  4000,
+                  Lang.bind(this, function () {
+                    this.initWS();
+                  })
+                );
+              } else if (status === 'disabled' || status === 'remote') {
+                if (socketClient !== undefined) {
+                  socketClient.abort();
                 }
               }
             })
           );
-        } else {
-          // locked
-          log('locked.');
-        }
-      })
-    );
-    this.sendMessageId = this.connect(
-      'send-message',
-      Lang.bind(this, function (uploader, message) {
-        this.sendMessage(message);
-      })
-    );
-  },
-  startService: function () {
-    if (_timeoutId !== 0) {
-      Mainloop.source_remove(_timeoutId);
+          _timeoutId = 0;
+        })
+      );
+  
+      // socketClient.abort();
     }
-    this.getServiceStatus(
-      Lang.bind(this, function (status) {
-        if (status === 'disabled' || status === 'failed') {
-          try {
-            GLib.spawn_command_line_async(
-              core_location + '/start-mycroft.sh all'
-            );
-            this.emitServiceStatus('starting');
-            _timeoutId = Mainloop.timeout_add(
-              5000,
-              Lang.bind(this, function () {
-                this.getServiceStatus(
-                  Lang.bind(this, function (status) {
-                    if (status === 'active') {
-                      _timeoutId = Mainloop.timeout_add(
-                        5000,
-                        Lang.bind(this, function () {
-                          this.initWS();
-                        })
-                      );
-                    }
-                  })
-                );
-                _timeoutId = 0;
-              })
-            );
-          } catch (e) {
-            log('Mycroft UI - Start Service' + e);
-          }
-        }
-      })
-    );
-  },
-  stopService: function (callback) {
-    this.emitServiceStatus('stopping');
-    try {
-      GLib.spawn_command_line_async(core_location + '/stop-mycroft.sh');
-      this.closeSocket();
-      this.wsStarted = false;
-    } catch (e) {
-      log('Mycroft UI - Stop Service' + e);
+    onError(connection, error) {
+      log('Mycroft UI - Connection Error : ' + error);
     }
-    this.emitServiceStatus('disabled');
-  },
-  getServiceStatus: function (callback) {
-    let e, outStr;
-    if (mycroft_is_install && install_type != 2) {
-      try {
-        let [ res, out, standard_error, exit_status ] = GLib.spawn_command_line_sync(EXTENSIONDIR + '/shellscripts/serviceStatus.sh');
-        log(out, exit_status);
-        if (out.length > 1) {
-          // outStr = out.toString();
-          if (
-            !exit_status
-          ) {
-            if (this.wsStarted) {
-              this.emitServiceStatus('active');
-            } else {
-              this.emitServiceStatus('starting');
-            }
-            callback('active');
-          } else {
-            callback('disabled');
-          }
-        } else {
-          callback('disabled');
+    sendMessage(val) {
+      if (this.wsStarted) {
+        let socketmessage = {};
+        socketmessage.type = 'recognizer_loop:utterance';
+        socketmessage.data = {};
+        socketmessage.data.utterances = [ val ];
+        try {
+          this.connection.send_text(JSON.stringify(socketmessage));
+        } catch (e) {
+          log('Mycroft UI - Send Message: ' + e);
         }
-      } catch (err) {
-        log('Mycroft UI - Get Service Status' + err);
+      } else {
+        log('Mycroft UI - No web socket');
       }
-    } else if (install_type == 2) {
-      callback('remote');
-    } else {
-      this.emitServiceStatus('install');
-      callback('install');
     }
-  },
-  initWS: function () {
-    this.user_agent = Me.metadata.uuid;
-    if (
-      Me.metadata.version !== undefined &&
-      Me.metadata.version.toString().trim() !== ''
-    ) {
-      this.user_agent += '/';
-      this.user_agent += Me.metadata.version.toString();
-    }
-    this.user_agent += ' ';
-    if (!this.wsStarted && mycroft_is_install) {
-      // if (socketClient === undefined) {
-      //  socketClient = new Soup.Session();
-      //  socketClient.user_agent = this.user_agent;
-      // } else {
-      //  // abort previous requests.
-      //  socketClient.abort();
-      //  socketClient = new Soup.Session();
-      // }
-      // let proxy = new Soup.ProxyResolverDefault();
-      // Soup.Session.prototype.add_feature.call(socketClient, proxy);
-
-      socketClient.httpsAliases = [ 'wss' ];
-      let message = new Soup.Message({
-        method: 'GET',
-        uri: new Soup.URI(
-          'ws://' + this.ip_address + ':' + this.port_number + '/core'
-        ),
-      });
+    closeSocket() {
       try {
-        socketClient.websocket_connect_async(
-          message,
-          null,
-          null,
-          null,
-          Lang.bind(this, function (session, result) {
-            try {
-              this.connection = session.websocket_connect_finish(result);
-              if (this.connection !== null) {
-                this.connection.connect(
-                  'message',
-                  Lang.bind(this, this.onMessage)
-                );
-
-                this.connection.connect(
-                  'closed',
-                  Lang.bind(this, function (connection) {
-                    this.onClosed(connection);
-                  })
-                );
-
-                this.wsStarted = true;
-              }
-            } catch (e) {
-              if (this.install_type == 2) {
-                this.emitServiceStatus('remote-error');
-              }
-              this.emitServiceStatus('failed');
-            }
-          })
-        );
+        if (this.connection) {
+          this.connection.close(Soup.WebsocketCloseCode.NORMAL, '');
+        }
+        if (socketClient) {
+          socketClient.abort();
+        }
       } catch (e) {
-        log('Mycroft UI - Init Websocket' + e);
+        log('Mycroft UI - Close Socket: ' + e);
       }
     }
-    this.locked = false;
-  },
-  onMessage: function (connection, type, message) {
-    let data = JSON.parse(message.get_data());
-    if (data.type === 'connected') {
-      this.emitServiceStatus('active'); // Active();
-    } else if (data.type === 'speak') {
-      this.emit('message-recieved', data.data.utterance, 'mycroft');
-    } else if (data.type === 'mycroft.not.paired') {
-      //
-    } else if (data.type === 'recognizer_loop:audio_output_start') {
-      this.emitAnimationStatus('audio_output_start');
-    } else if (data.type === 'recognizer_loop:audio_output_end') {
-      this.emitAnimationStatus('audio_output_stop');
-    } else if (data.type === 'enclosure.weather.display') {
-      // log('show Weather Panel');
-    } else if (data.type === 'configuration.updated') {
-      this.wsStarted = true;
-    } else if (data.type === 'recognizer_loop:record_begin') {
-      this.emitServiceStatus('listening');
-    } else if (data.type === 'recognizer_loop:record_end') {
-      this.emitServiceStatus('active');
-    } else if (data.type === 'configuration.updated') {
-      // later
-    } else if (data.type === 'recognizer_loop:utterance') {
-      this.emit('message-recieved', data.data.utterances[0], 'me');
-    } else if (data.type === 'intent_failure') {
-      // this.emit('message-recieved', 'Sorry I didn\'t understand you. Please rephrase or ask another question','mycroft');
-    }
-  },
-  onClosing: function (connection) {},
-  onClosed: function (connection) {
-    this.wsStarted = false;
-    // connection.close(Soup.WebsocketCloseCode.NORMAL, "");
-    if (_timeoutId !== 0) {
-      Mainloop.source_remove(_timeoutId);
-    }
-
-    _timeoutId = Mainloop.timeout_add(
-      6000,
-      Lang.bind(this, function () {
-        this.getServiceStatus(
-          Lang.bind(this, function (status) {
-            if (status === 'active') {
-              _timeoutId = Mainloop.timeout_add(
-                4000,
-                Lang.bind(this, function () {
-                  this.initWS();
-                })
-              );
-            } else if (status === 'disabled' || status === 'remote') {
-              if (socketClient !== undefined) {
-                socketClient.abort();
-              }
-            }
-          })
-        );
-        _timeoutId = 0;
-      })
-    );
-
-    // socketClient.abort();
-  },
-  onError: function (connection, error) {
-    log('Mycroft UI - Connection Error : ' + error);
-  },
-  sendMessage: function (val) {
-    if (this.wsStarted) {
-      let socketmessage = {};
-      socketmessage.type = 'recognizer_loop:utterance';
-      socketmessage.data = {};
-      socketmessage.data.utterances = [ val ];
-      try {
-        this.connection.send_text(JSON.stringify(socketmessage));
-      } catch (e) {
-        log('Mycroft UI - Send Message: ' + e);
+    emitServiceStatus(status, arg) {
+      if (status === 'starting' || status === 'stopping') {
+        this.locked = true;
+      } else {
+        this.locked = false;
       }
-    } else {
-      log('Mycroft UI - No web socket');
+      this.emitAnimationStatus(status);
+      this.emit('mycroft-status', status);
     }
-  },
-  closeSocket: function () {
-    try {
-      if (this.connection) {
-        this.connection.close(Soup.WebsocketCloseCode.NORMAL, '');
+    emitAnimationStatus(status) {
+      if (status === 'audio_output_start') {
+        this.emit('mycroft-animation-start', 'active');
+      } else if (status === 'audio_output_stop') {
+        this.emit('mycroft-animation-stop', 'active');
+      } else if (
+        status === 'starting' ||
+        status === 'stopping' ||
+        status === 'listening'
+      ) {
+        this.emit('mycroft-animation-start', status);
+      } else {
+        this.emit('mycroft-animation-stop', status);
       }
-      if (socketClient) {
-        socketClient.abort();
+    }
+    destroy() {
+      if (this._settingsC) {
+        this._settings.disconnect(this._settingsC);
+        this._settingsC = undefined;
       }
-    } catch (e) {
-      log('Mycroft UI - Close Socket: ' + e);
+      if (this.serviceClicked) {
+        this.disconnect(this.serviceClicked);
+        this.serviceClicked = 0;
+      }
+      if (this.sendMessageId) {
+        this.disconnect(this.sendMessageId);
+        this.sendMessageId = 0;
+      }
     }
-  },
-  emitServiceStatus: function (status, arg) {
-    if (status === 'starting' || status === 'stopping') {
-      this.locked = true;
-    } else {
-      this.locked = false;
-    }
-    this.emitAnimationStatus(status);
-    this.emit('mycroft-status', status);
-  },
-  emitAnimationStatus: function (status) {
-    if (status === 'audio_output_start') {
-      this.emit('mycroft-animation-start', 'active');
-    } else if (status === 'audio_output_stop') {
-      this.emit('mycroft-animation-stop', 'active');
-    } else if (
-      status === 'starting' ||
-      status === 'stopping' ||
-      status === 'listening'
-    ) {
-      this.emit('mycroft-animation-start', status);
-    } else {
-      this.emit('mycroft-animation-stop', status);
-    }
-  },
-  destroy: function () {
-    if (this._settingsC) {
-      this._settings.disconnect(this._settingsC);
-      this._settingsC = undefined;
-    }
-    if (this.serviceClicked) {
-      this.disconnect(this.serviceClicked);
-      this.serviceClicked = 0;
-    }
-    if (this.sendMessageId) {
-      this.disconnect(this.sendMessageId);
-      this.sendMessageId = 0;
-    }
-  },
-  loadConfig: function () {
-    this._settings = Convenience.getSettings(MYCROFT_SETTINGS_SCHEMA);
-    mycroft_is_install = this.mycroft_is_install;
-    install_type = this.mycroft_install_type;
-    if (this._settingsC) {
-      this._settings.disconnect(this._settingsC);
-    }
-    this._settingsC = this._settings.connect(
-      'changed',
-      Lang.bind(this, function () {
-        position_in_panel = this._position_in_panel;
-        core_location = this.core_location;
-        animation_status = this.animation_status;
-        let mycroft_is_install_change = this.mycroft_is_install;
-        let install_type_change = this.install_type;
-        this.emit('settings-changed');
-        if (mycroft_is_install !== mycroft_is_install_change) {
-          mycroft_is_install = this.mycroft_is_install;
-          this.emitServiceStatus('disabled');
-        } else if (mycroft_is_install_change === false) {
-          if (this.wsStarted) {
-            this.stopService();
-          }
-          this.emitServiceStatus('install');
-        }
-        if (install_type !== install_type_change) {
-          install_type = this.install_type;
-          if (install_type == 2) {
+    loadConfig() {
+      this._settings = Convenience.getSettings(MYCROFT_SETTINGS_SCHEMA);
+      mycroft_is_install = this.mycroft_is_install;
+      install_type = this.mycroft_install_type;
+      if (this._settingsC) {
+        this._settings.disconnect(this._settingsC);
+      }
+      this._settingsC = this._settings.connect(
+        'changed',
+        Lang.bind(this, function () {
+          position_in_panel = this._position_in_panel;
+          core_location = this.core_location;
+          animation_status = this.animation_status;
+          let mycroft_is_install_change = this.mycroft_is_install;
+          let install_type_change = this.install_type;
+          this.emit('settings-changed');
+          if (mycroft_is_install !== mycroft_is_install_change) {
+            mycroft_is_install = this.mycroft_is_install;
             this.emitServiceStatus('disabled');
+          } else if (mycroft_is_install_change === false) {
             if (this.wsStarted) {
-              this.closeSocket();
+              this.stopService();
+            }
+            this.emitServiceStatus('install');
+          }
+          if (install_type !== install_type_change) {
+            install_type = this.install_type;
+            if (install_type == 2) {
+              this.emitServiceStatus('disabled');
+              if (this.wsStarted) {
+                this.closeSocket();
+              }
             }
           }
-        }
-      })
-    );
-  },
-  get mycroft_is_install() {
-    if (!this._settings) {
-      this.loadConfig();
+        })
+      );
     }
-    return this._settings.get_boolean(MYCROFT_IS_INSTALL_KEY);
-  },
-  get _position_in_panel() {
-    if (!this._settings) {
-      this.loadConfig();
+    get mycroft_is_install() {
+      if (!this._settings) {
+        this.loadConfig();
+      }
+      return this._settings.get_boolean(MYCROFT_IS_INSTALL_KEY);
     }
-    return this._settings.get_enum(MYCROFT_POSITION_IN_PANEL_KEY);
-  },
-  get core_location() {
-    if (!this._settings) {
-      this.loadConfig();
+    get _position_in_panel() {
+      if (!this._settings) {
+        this.loadConfig();
+      }
+      return this._settings.get_enum(MYCROFT_POSITION_IN_PANEL_KEY);
     }
-    return this._settings.get_string(MYCROFT_CORE_LOCATION_KEY);
-  },
-  get install_type() {
-    if (!this._settings) {
-      this.loadConfig();
+    get core_location() {
+      if (!this._settings) {
+        this.loadConfig();
+      }
+      return this._settings.get_string(MYCROFT_CORE_LOCATION_KEY);
     }
-    return this._settings.get_int(MYCROFT_INSTALL_TYPE_KEY);
-  },
-  get animation_status() {
-    if (!this._settings) {
-      this.loadConfig();
+    get install_type() {
+      if (!this._settings) {
+        this.loadConfig();
+      }
+      return this._settings.get_int(MYCROFT_INSTALL_TYPE_KEY);
     }
-    return this._settings.get_boolean(MYCROFT_ANIMATION_STATUS_KEY);
-  },
-  get ip_address() {
-    if (!this._settings) {
-      this.loadConfig();
+    get animation_status() {
+      if (!this._settings) {
+        this.loadConfig();
+      }
+      return this._settings.get_boolean(MYCROFT_ANIMATION_STATUS_KEY);
     }
-    return this._settings.get_string(MYCROFT_IP_ADDRESS_KEY);
-  },
-  get port_number() {
-    if (!this._settings) {
-      this.loadConfig();
+    get ip_address() {
+      if (!this._settings) {
+        this.loadConfig();
+      }
+      return this._settings.get_string(MYCROFT_IP_ADDRESS_KEY);
     }
-    return this._settings.get_string(MYCROFT_PORT_NUMBER_KEY);
-  },
-});
-const MycroftUI = new Lang.Class({
-  Name: 'MycroftUI',
+    get port_number() {
+      if (!this._settings) {
+        this.loadConfig();
+      }
+      return this._settings.get_string(MYCROFT_PORT_NUMBER_KEY);
+    }
+  }
+);
 
-  _init: function () {
+
+const MycroftUI = GObject.registerClass({
+  GTypeName: 'MycroftUI',
+  Signals: {
+    'mycroft-service-clicked': {}
+  }
+}, class MycroftUI extends GObject.Object{
+  constructor() {
+    super();
     this.mycroftService = new MycroftServiceManager();
 
     this.mycroftPanel = new MycroftPanelButton();
+   
+
+
     this.myUi = new MycroftPopup();
     this.setEventListeners();
 
@@ -520,30 +554,30 @@ const MycroftUI = new Lang.Class({
 
     this.myUi.core_location = this.mycroftPanel.core_location;
 
-    Main.panel.addToStatusArea('mycroftAi', this.mycroftPanel);
+    Main.panel.addToStatusArea('mycroftAi', this.mycroftPanel, 1);
 
     applyStyles();
-  },
-  setEventListeners: function () {
+  }
+  setEventListeners() {
     // Service Status Connect
+    
     this.mycroftServiceSettingsChangedId = this.mycroftService.connect(
-      'settings-changed',
-      Lang.bind(this.mycroftPanel, function (uploader, status) {
-        this.checkPositionInPanel();
-      })
-    );
-
+      'settings-changed', (uploader) => {
+        this.mycroftPanel.checkPositionInPanel();
+      });
+      
     this.mycroftServiceStatusId = this.mycroftService.connect(
       'mycroft-status',
       Lang.bind(this, this.updateStatus)
     );
-
+    
     this.myUiTopMenuBarServiceActorClickId = this.myUi.topMenuBar.serviceActor.connect(
       'clicked',
       Lang.bind(this.mycroftService, function () {
         this.emit('mycroft-service-clicked');
       })
     );
+    
     this.mycroftServiceMycroftAnimationStartId = this.mycroftService.connect(
       'mycroft-animation-start',
       Lang.bind(
@@ -551,6 +585,7 @@ const MycroftUI = new Lang.Class({
         this.myUi.displayBox.searchBox.barAnimation.startAnimation
       )
     );
+    
     this.mycroftServiceMycroftAnimationStopId = this.mycroftService.connect(
       'mycroft-animation-stop',
       Lang.bind(
@@ -558,16 +593,19 @@ const MycroftUI = new Lang.Class({
         this.myUi.displayBox.searchBox.barAnimation.stopAnimation
       )
     );
+    
     this.myUiDisplayBoxSearchBoxChatBoxSendMessageId = this.myUi.displayBox.searchBox.chatBox.connect(
       'send-message',
       Lang.bind(this, function (uploader, message) {
         this.mycroftService.emit('send-message', message);
       })
     );
+    
     this.myUiTopMenuBarHintActorClickedId = this.myUi.topMenuBar.hintActor.connect(
       'clicked',
       Lang.bind(this.myUi.displayBox, this.myUi.displayBox.showPage)
     );
+    
     this.myUiTopMenuBarSearchActorClickedId = this.myUi.topMenuBar.searchActor.connect(
       'clicked',
       Lang.bind(this.myUi.displayBox, this.myUi.displayBox.showPage)
@@ -580,6 +618,7 @@ const MycroftUI = new Lang.Class({
         this.myUi.displayBox.searchBox.conversationBox.addMessage
       )
     );
+    
     this.myUiTopMenuBarSettingsActorClickedId = this.myUi.topMenuBar.settingsActor.connect(
       'clicked',
       Lang.bind(this.mycroftPanel, function () {
@@ -588,14 +627,14 @@ const MycroftUI = new Lang.Class({
         return 0;
       })
     );
-  },
-  updateStatus: function (uploader, status) {
+  }
+  updateStatus(uploader, status) {
     this.myUi.displayBox.searchBox.updateStatus(status);
     status = status == 'remote-error' ? 'failed' : status;
     this.mycroftPanel.updatePanelIcon(status);
     this.myUi.topMenuBar.emit('mycroft-status', status);
-  },
-  destroy: function () {
+  }
+  destroy() {
     this.destroySignals();
     this.myUi.destroy();
     this.myUi = null;
@@ -604,8 +643,8 @@ const MycroftUI = new Lang.Class({
     this.mycroftService = null;
     this.mycroftPanel.destroy();
     this.mycroftPanel = null;
-  },
-  destroySignals: function () {
+  }
+  destroySignals() {
     if (this.mycroftServiceSettingsChangedId) {
       this.mycroftService.disconnect(this.mycroftServiceSettingsChangedId);
       this.mycroftServiceSettingsChangedId = 0;
@@ -658,54 +697,52 @@ const MycroftUI = new Lang.Class({
       );
       this.myUiTopMenuBarSettingsActorClickedId = 0;
     }
-  },
+  }
 });
 
-const MycroftPanelButton = new Lang.Class({
-  Name: 'MycroftPanelButton',
-
-  Extends: PanelMenu.Button,
-
-  _init: function () {
+const MycroftPanelButton = GObject.registerClass({
+    GTypeName: 'MycroftPanelButton'
+  }, class MycroftPanelButton extends PanelMenu.Button{
+  constructor() {
+    let menuAlignment = 1.0 - 50 / 100; // 50 is location
+    if (Clutter.get_default_text_direction() === Clutter.TextDirection.RTL) {
+      menuAlignment = 1.0 - menuAlignment;
+    }
+    super(0);   
     this._position_in_panel = position_in_panel;
 
     let gicon = Gio.icon_new_for_string(Me.path + '/icons/mycroftLogo.svg');
     this._mycroftIcon = new St.Icon({
       gicon: gicon,
       style_class: 'system-status-icon mycroft-icon',
-    });
-
-    let menuAlignment = 1.0 - 50 / 100; // 50 is location
-    if (Clutter.get_default_text_direction() === Clutter.TextDirection.RTL) {
-      menuAlignment = 1.0 - menuAlignment;
-    }
-    this.parent(menuAlignment);
+    });    
 
     // Putting the Panel Item together
     let topBox = new St.BoxLayout();
     topBox.add(this._mycroftIcon);
-    this.actor.add_actor(topBox);
+    this.add_child(topBox);
 
-    let dummyBox = new St.BoxLayout();
-    this.actor.reparent(dummyBox);
-    dummyBox.remove_actor(this.actor);
-    dummyBox.destroy();
+    //Not sure what this does
+    //let dummyBox = new St.BoxLayout();
+    //this.actor.reparent(dummyBox);
+    //dummyBox.remove_actor(this.actor);
+    //dummyBox.destroy();
     let children = null,
-      childrenL = 0;
+    childrenL = 0;
     switch (this._position_in_panel) {
     case MycroftPosition.LEFT:
       children = Main.panel._leftBox.get_children();
       childrenL = children.length > 0 ? children.length : 0;
-      Main.panel._leftBox.insert_child_at_index(this.actor, childrenL);
+      Main.panel._leftBox.insert_child_at_index(this.container, childrenL);
       break;
     case MycroftPosition.CENTER:
       children = Main.panel._centerBox.get_children();
       childrenL = children.length > 0 ? children.length : 0;
-      Main.panel._centerBox.insert_child_at_index(this.actor, childrenL);
+      Main.panel._centerBox.insert_child_at_index(this.container, childrenL);
       break;
     case MycroftPosition.RIGHT:
       children = Main.panel._rightBox.get_children();
-      Main.panel._rightBox.insert_child_at_index(this.actor, 0);
+      Main.panel._rightBox.insert_child_at_index(this.container, 0);
       break;
     default:
       // do nothing
@@ -717,8 +754,8 @@ const MycroftPanelButton = new Lang.Class({
       Main.panel._menu.addMenu(this.menu);
     }
     this.a = 10;
-  },
-  checkPositionInPanel: function () {
+  }
+  checkPositionInPanel() {
     if (this._old_position_in_panel !== position_in_panel) {
       switch (this._old_position_in_panel) {
       case MycroftPosition.LEFT:
@@ -755,16 +792,17 @@ const MycroftPanelButton = new Lang.Class({
       }
       this._old_position_in_panel = position_in_panel;
     }
-  },
-  updatePanelIcon: function (status) {
+  }
+  updatePanelIcon(){
     this.colorizeEffect = new Clutter.ColorizeEffect({
       enabled: true,
     });
-    this.colorizeEffect.set_tint(getColor(status));
+    //TODO removed for compiatbility
+    //this.colorizeEffect.set_tint(getColor(status));
     this._mycroftIcon.clear_effects();
     this._mycroftIcon.add_effect(this.colorizeEffect);
-  },
-  removePanelIcon: function () {
+  }
+  removePanelIcon(){
     switch (this._position_in_panel) {
     case MycroftPosition.LEFT:
       Main.panel._leftBox.remove_actor(this.actor);
@@ -778,11 +816,14 @@ const MycroftPanelButton = new Lang.Class({
     default:
       // do nothing
     }
-  },
+  }
 });
-const MycroftPopup = new Lang.Class({
-  Name: 'MycroftPopup',
-  _init: function () {
+
+const MycroftPopup = GObject.registerClass({
+  GTypeName: 'MycroftPopup'
+}, class MycroftPopup extends GObject.Object{
+  constructor() {
+    super();
     this.topMenuBar = new TopMenuBar();
 
     this.popupMenuMain = new PopupMenu.PopupBaseMenuItem({
@@ -794,35 +835,46 @@ const MycroftPopup = new Lang.Class({
       name: 'main-box',
       vertical: true,
     });
-
+    //Changed for compitability
+    /*
     this.mainBox.add_actor(this.topMenuBar.menuBar, {
       x_fill: true,
       x_align: St.Align.MIDDLE,
     });
+    */
+    this.mainBox.add_child(this.topMenuBar.menuBar)
+
+    /*
     this.popupMenuMain.actor.add_actor(this.mainBox, {
       x_fill: true,
       x_align: St.Align.MIDDLE,
       y_fill: true,
     });
+    */
+    this.popupMenuMain.actor.add_child(this.mainBox)
+
+
     this.displayBox = new DisplayBox();
     this.mainBox.add_actor(this.displayBox.actor);
-  },
-  addItem: function (gObj) {
+  }
+  addItem(gObj) {
     this.poupMenu.Main.actor.add_actor(gObj);
-  },
-  removeItem: function (gObj) {
+  }
+  removeItem(gObj) {
     this.popupMenu.Main.actor.remove_actor(gObj);
-  },
-  destroy: function () {
+  }
+  destroy() {
     this.popupMenuMain.destroy();
     this.topMenuBar.destroy();
     this.displayBox.destroy();
-  },
+  }
 });
 
-const DisplayBox = new Lang.Class({
-  Name: 'DisplayBox',
-  _init: function () {
+const DisplayBox = GObject.registerClass({
+  GTypeName: 'DisplayBox'},
+  class DisplayBox extends GObject.Object{
+  constructor() {
+    super();
     this.actor = new St.BoxLayout({
       style_class: 'display-box',
       name: 'displayBox',
@@ -832,8 +884,8 @@ const DisplayBox = new Lang.Class({
     this.searchBox = new SearchBox();
     this.hintBox = new HintBox();
     this.actor.add_actor(this.searchBox.actor);
-  },
-  destroy: function () {
+  }
+  destroy() {
     if (this.searchBox) {
       this.searchBox.destroy();
       this.searchBox = undefined;
@@ -846,8 +898,8 @@ const DisplayBox = new Lang.Class({
       this.actor.destroy();
       this.actor = undefined;
     }
-  },
-  showPage: function (uploader, event) {
+  }
+  showPage(uploader, event) {
     if (uploader.get_name() === 'hintActor') {
       this.actor.remove_actor(this.searchBox.actor);
       this.actor.add_actor(this.hintBox.actor);
@@ -856,43 +908,45 @@ const DisplayBox = new Lang.Class({
       this.actor.remove_actor(this.hintBox.actor);
       this.actor.add_actor(this.searchBox.actor);
     }
-  },
+  }
 });
-const SearchBox = new Lang.Class({
-  Name: 'SearchBox',
-  _init: function () {
-    this.actor = new St.BoxLayout({
-      name: 'searchBox',
-      x_expand: true,
-      y_expand: true,
-      vertical: true,
-    });
-    this.barAnimation = new MycroftBarAnimation();
-    this.actor.add_actor(this.barAnimation.animationBox);
-    this.sBox = new St.BoxLayout({
-      x_expand: true,
-      y_expand: true,
-      y_align: Clutter.ActorAlign.END,
-      vertical: true,
-    });
-    this.actor.add_actor(this.sBox);
-    this.chatBox = new ChatBox();
-    this.conversationBox = new ConversationBox();
+const SearchBox = GObject.registerClass({
+  GTypeName: 'SearchBox'},
+  class SearchBox extends GObject.Object {
+    constructor() {
+      super();
+      this.actor = new St.BoxLayout({
+        name: 'searchBox',
+        x_expand: true,
+        y_expand: true,
+        vertical: true,
+      });
+      this.barAnimation = new MycroftBarAnimation();
+      this.actor.add_actor(this.barAnimation.animationBox);
+      this.sBox = new St.BoxLayout({
+        x_expand: true,
+        y_expand: true,
+        y_align: Clutter.ActorAlign.END,
+        vertical: true,
+      });
+      this.actor.add_actor(this.sBox);
+      this.chatBox = new ChatBox();
+      this.conversationBox = new ConversationBox();
 
-    this.label = new St.Label({
-      name: 'basic-text',
-      text: 'Mycroft is disabled',
-      style_class: 'search-box-label disabled',
-      y_align: Clutter.ActorAlign.END,
-      x_align: Clutter.ActorAlign.CENTER,
-      x_expand: true,
-    });
-    this.label.clutter_text.line_wrap = true;
-    this.label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
-    this.label.clutter_text.x_align = Clutter.ActorAlign.CENTER;
-    this.sBox.add_actor(this.label);
-  },
-  destroy: function () {
+      this.label = new St.Label({
+        name: 'basic-text',
+        text: 'Mycroft is disabled',
+        style_class: 'search-box-label disabled',
+        y_align: Clutter.ActorAlign.END,
+        x_align: Clutter.ActorAlign.CENTER,
+        x_expand: true,
+      });
+      this.label.clutter_text.line_wrap = true;
+      this.label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+      this.label.clutter_text.x_align = Clutter.ActorAlign.CENTER;
+      this.sBox.add_actor(this.label);
+  }
+  destroy() {
     if (this.barAnimation) {
       this.barAnimation.destroy();
       this.barAnimation = undefined;
@@ -913,8 +967,8 @@ const SearchBox = new Lang.Class({
       this.actor.destroy();
       this.actor = undefined;
     }
-  },
-  updateStatus: function (status) {
+  }
+  updateStatus(status) {
     switch (status) {
     case 'active':
     case 'listening':
@@ -960,17 +1014,20 @@ const SearchBox = new Lang.Class({
       // do nothing
     }
     this.updateStatusLabelStyle(status);
-  },
-  updateStatusLabelStyle: function (status) {
+  }
+  updateStatusLabelStyle(status) {
     let style = this.label.get_style_class_name();
     let abc = style.split(' ');
     this.label.remove_style_class_name(abc[1]);
     this.label.add_style_class_name(status);
-  },
+  }
 });
-const HintBox = new Lang.Class({
-  Name: 'HintBox',
-  _init: function () {
+
+const HintBox = GObject.registerClass({
+  GTypeName: 'HintBox'},
+  class HintBox extends GObject.Object {
+  constructor() {
+    super();
     this.actor = new St.BoxLayout({
       name: 'hintBox',
       style_class: 'hint-box',
@@ -982,8 +1039,8 @@ const HintBox = new Lang.Class({
       style_class: 'scroll-view verticalfade',
       x_expand: true,
       y_expand: true,
-      x_fill: true,
-      y_fill: true,
+      //x_fill: true,
+      //y_fill: true,
     });
     this._scrollView.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
     this.actor.add_actor(this._scrollView);
@@ -994,8 +1051,8 @@ const HintBox = new Lang.Class({
     });
     this._scrollView.add_actor(this.hintView);
     this.hintText();
-  },
-  addHeader: function (text) {
+  }
+  addHeader(text) {
     let label = new St.Label({
       text: text,
       style_class: 'hint-header',
@@ -1003,8 +1060,8 @@ const HintBox = new Lang.Class({
     label.clutter_text.line_wrap = true;
     label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
     this.hintView.add_actor(label);
-  },
-  addText: function (text) {
+  }
+  addText(text) {
     let labelBin = new St.BoxLayout({
       name: 'labelBin',
     });
@@ -1022,8 +1079,8 @@ const HintBox = new Lang.Class({
     labelBin.add_actor(tempLabel);
     labelBin.add_actor(label);
     this.hintView.add_actor(labelBin);
-  },
-  hintText: function () {
+  }
+  hintText() {
     let hintInfo = [
       {
         header: 'Alarm',
@@ -1060,8 +1117,8 @@ const HintBox = new Lang.Class({
         this.addText(hintInfo[i].text[j]);
       }
     }
-  },
-  destroy: function () {
+  }
+  destroy() {
     if (this.hintView) {
       this.hintView.destroy();
       this.hintView = undefined;
@@ -1074,12 +1131,13 @@ const HintBox = new Lang.Class({
       this.actor.destroy();
       this.actor = undefined;
     }
-  },
+  }
 });
-const ConversationBox = new Lang.Class({
-  Name: 'ConversationBox',
-  Extends: MycroftPopup,
-  _init: function () {
+const ConversationBox = GObject.registerClass({
+  GTypeName: 'ConversationBox'},
+  class ConversationBox extends GObject.Object{ 
+  constructor() {
+    super();
     this.clearId = 0;
     this.actor = new St.BoxLayout({
       style_class: 'conversation-box',
@@ -1091,8 +1149,6 @@ const ConversationBox = new Lang.Class({
       style_class: 'scroll-view verticalfade',
       x_expand: true,
       y_expand: true,
-      x_fill: true,
-      y_fill: true,
     });
     this._scrollView.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
     this.actor.add_actor(this._scrollView);
@@ -1110,14 +1166,13 @@ const ConversationBox = new Lang.Class({
       (this._initButton = new St.Button({
         name: 'initButton',
         x_align: Clutter.ActorAlign.START,
-        x_fill: false,
         child: this._initMessage,
       }));
 
     this.conversationView.add_actor(this._initButton);
     this._initButton.set_x_align(Clutter.ActorAlign.CENTER);
-  },
-  destroy: function () {
+  }
+  destroy() {
     if (this.clearId) {
       this._initButton.disconnect(this.clearId);
       this.clearId = 0;
@@ -1138,8 +1193,8 @@ const ConversationBox = new Lang.Class({
       this.actor.destroy();
       this.actor = undefined;
     }
-  },
-  addMessage: function (uploader, message, reciever) {
+  }
+  addMessage(uploader, message, reciever) {
     let labelCss = reciever === 'me' ? 'sent-label' : 'reciever-label';
     let align =
       reciever === 'me' ? Clutter.ActorAlign.END : Clutter.ActorAlign.START;
@@ -1163,8 +1218,8 @@ const ConversationBox = new Lang.Class({
       }
     }
     Util.ensureActorVisibleInScrollView(this._scrollView, label);
-  },
-  clearConversation: function () {
+  }
+  clearConversation() {
     if (this.clearId !== 0) {
       this._initButton.disconnect(this.clearId);
       this.clearId = 0;
@@ -1174,12 +1229,20 @@ const ConversationBox = new Lang.Class({
     this._initButton.set_x_align(Clutter.ActorAlign.CENTER);
     this._initButton.remove_style_class_name('clear-button');
     this.conversationView.add_actor(this._initButton);
-  },
+  }
 });
-const ChatBox = new Lang.Class({
-  Name: 'ChatBox',
-  Extends: PopupMenu.PopupBaseMenuItem,
-  _init: function () {
+
+const ChatBox = GObject.registerClass({
+  GTypeName: 'ChatBox',
+  Signals: {
+      'send-message': {
+        param_types: [GObject.TYPE_STRING],
+      },
+    },
+  },
+  class ChatBox extends PopupMenu.PopupBaseMenuItem {
+  constructor() {
+    super();
     this.inputStream = new InputStream();
     this.messageBox = new St.BoxLayout({
       name: 'messageBox',
@@ -1201,6 +1264,7 @@ const ChatBox = new Lang.Class({
       track_hover: true,
       can_focus: true,
     });
+
     this._entryBin = new St.Bin({
       child: this._entry,
       x_align: St.Align.MIDDLE,
@@ -1237,22 +1301,22 @@ const ChatBox = new Lang.Class({
     this.messageBox.add_actor(this._entryBin);
 
     this.setEventListeners();
-  },
-  setEventListeners: function () {
+  }
+  setEventListeners() {
     this.suggestionsClickedId = this._suggestionsResults.connect(
       'suggestions-clicked',
       Lang.bind(this, this.suggestionsClick)
     );
     this.suggestionsEntryFocusId = this._suggestionsResults.connect(
-      'entry-focus',
+     'entry-focus',
       Lang.bind(this, this._entryFocus)
     );
     this.inputStreamId = this.inputStream.connect(
-      'stream-status',
-      Lang.bind(this, this._isMuted)
+     'stream-status',
+    Lang.bind(this, this._isMuted)
     );
-  },
-  destroy: function () {
+  }
+  destroy() {
     if (this._textChangedId) {
       this._text.disconnect(this._textChangedId);
       this._textChangedId = 0;
@@ -1303,11 +1367,11 @@ const ChatBox = new Lang.Class({
       this._entry = undefined;
       this._entryBin = undefined;
     }
-  },
-  _entryFocus: function () {
+  }
+  _entryFocus() {
     this._entry.grab_key_focus();
-  },
-  suggestionsClick: function (uploader, suggestString) {
+  }
+  suggestionsClick(uploader, suggestString) {
     if (this._suggestionsResults.suggestionFound) {
       this.reset();
     }
@@ -1319,14 +1383,14 @@ const ChatBox = new Lang.Class({
     } else {
       this._entry.set_text(suggestString + ' ');
     }
-  },
-  reset: function () {
+  }
+  reset() {
     this._entry.text = '';
 
     this._text.set_cursor_visible(true);
     this._text.set_selection(0, 0);
-  },
-  getTermsForSearchString: function (searchString) {
+  }
+  getTermsForSearchString(searchString) {
     searchString = searchString.replace(/^\s+/g, '').replace(/\s+$/g, '');
     if (searchString === '') {
       return [];
@@ -1334,8 +1398,8 @@ const ChatBox = new Lang.Class({
 
     let terms = searchString.split(/\s+/);
     return terms;
-  },
-  _onTextChanged: function (se, prop) {
+  }
+  _onTextChanged(se, prop) {
     let terms = this.getTermsForSearchString(this._entry.get_text());
     this._suggestionsActive = terms.length > 0;
 
@@ -1360,11 +1424,11 @@ const ChatBox = new Lang.Class({
         this.reset();
       }
     }
-  },
-  _onPrimaryIconClick: function () {
+  }
+  _onPrimaryIconClick() {
     this.inputStream.emit('mute');
-  },
-  _isMuted: function (uploader, volume) {
+  }
+  _isMuted(uploader, volume) {
     if (!this.inputStream._stream.is_muted) {
       if (volume === 0) {
         this._primaryIcon.set_icon_name(
@@ -1382,11 +1446,11 @@ const ChatBox = new Lang.Class({
     } else {
       this._primaryIcon.set_icon_name('microphone-sensitivity-muted-symbolic');
     }
-  },
-  _isActivated: function () {
+  }
+  _isActivated() {
     return this._text.text === this._entry.get_text();
-  },
-  _suggestionsCancelled: function () {
+  }
+  _suggestionsCancelled() {
     this._suggestionsResults._hide();
 
     // Leave the entry focused when it doesn't have any text;
@@ -1398,39 +1462,46 @@ const ChatBox = new Lang.Class({
     if (this._text.text !== '') {
       this.reset();
     }
-  },
-  _onKeyPress: function (entry, event) {
+  }
+  _onKeyPress(entry, event) {
+  
     let symbol = event.get_key_symbol();
     if (symbol === Clutter.Escape) {
       if (this._isActivated()) {
         this.reset();
         return Clutter.EVENT_STOP;
       }
-    } else if (symbol === Clutter.Up) {
+    } else if (symbol === Clutter.Up || symbol === Clutter.KEY_Up) {
       this._suggestionsResults.suggestFirstButton.grab_key_focus();
       return Clutter.EVENT_STOP;
-    } else if (symbol === Clutter.Return || symbol === Clutter.KP_Enter) {
+    } else if (symbol === Clutter.Return || symbol === Clutter.KP_Enter || symbol === Clutter.KEY_Return) {
       this.sendMessage(this._entry.get_text());
       return Clutter.EVENT_STOP;
     }
     return Clutter.EVENT_PROPAGATE;
-  },
-  sendMessage: function (utteranceString) {
+  }
+  sendMessage(utteranceString) {
     if (utteranceString.trim() !== '') {
       this.emit('send-message', utteranceString.trim());
     }
-  },
+  }
 });
-const InputStream = new Lang.Class({
-  Name: 'InputStream',
-  Extends: PopupMenu.PopupBaseMenuItem,
-  _init: function () {
+const InputStream = GObject.registerClass({
+  GTypeName: 'InputStream',
+  Signals: {
+    'stream-status' : {
+      param_types: [GObject.TYPE_FLOAT],
+    }
+  }},
+  class InputStream extends PopupMenu.PopupBaseMenuItem{
+  constructor() {
+    super();
     this._control = getMixerControl();
     this._controtStateChangedId = this._control.connect(
       'state-changed',
       Lang.bind(this, this._onControlStateChanged)
     );
-  },
+  }
   set stream(stream) {
     if (this._stream) {
       this._disconnectStream(this._stream);
@@ -1441,8 +1512,8 @@ const InputStream = new Lang.Class({
     if (this._stream) {
       this._connectStream(this._stream);
     }
-  },
-  destroy: function () {
+  }
+  destroy() {
     if (this._controtStateChangedId) {
       this._control.disconnect(this._controtStateChangedId);
       this._controtStateChangedId = 0;
@@ -1459,35 +1530,40 @@ const InputStream = new Lang.Class({
       this._stream.disconnect(this._volumeChangedId);
       this._volumeChangedId = 0;
     }
-  },
+  }
   get stream() {
     return this._stream;
-  },
-  _onControlStateChanged: function () {
+  }
+  _onControlStateChanged() {
     if (this._control.get_state() === Gvc.MixerControlState.READY) {
       this._readInput();
     } else {
       this.emit('stream-active');
     }
-  },
-  _readInput: function () {
+  }
+  _readInput() {
     this.stream = this._control.get_default_source();
-  },
-  _connectStream: function (stream) {
+  }
+  _connectStream(stream) {
     this.volume = this._stream.volume / this._control.get_vol_max_norm();
-    this._muteClickedId = this.connect('mute', Lang.bind(this, this._mute));
+    //TODO removed for compitablity
+    //this._muteClickedId = this.connect('mute', Lang.bind(this, this._mute));
     this._mutedChangedId = stream.connect(
       'notify::is-muted',
+
+
+      
       Lang.bind(this, this._updateVolume)
     );
     this._volumeChangedId = stream.connect(
       'notify::volume',
       Lang.bind(this, this._updateVolume)
     );
-    this.emit('stream-status', this.volume);
-  },
-  _disconnectStream: function (stream) {
-    this.disconnect(this._muteClickedId);
+    //TODO removed for compitability
+    //this.emit('stream-status', this.volume);
+  }
+  _disconnectStream(stream) {
+    //this.disconnect(this._muteClickedId);
     this._muteClickedId = 0;
     if (stream) {
       stream.disconnect(this._mutedChangedId);
@@ -1495,8 +1571,8 @@ const InputStream = new Lang.Class({
       stream.disconnect(this._volumeChangedId);
       this._volumeChangedId = 0;
     }
-  },
-  _mute: function () {
+  }
+  _mute() {
     let isMuted;
     if (!this._stream) {
       return;
@@ -1511,31 +1587,39 @@ const InputStream = new Lang.Class({
     }
     this._stream.push_volume();
     this.emit('stream-status', this.volume);
-  },
-  _unmute: function () {
+  }
+  _unmute() {
     this._stream.volume = volume;
     if (prevMuted) {
       this._stream.change_is_muted(false);
     }
     this.emit('unmute_stream');
     this._stream.push_volume();
-  },
-  _updateVolume: function () {
+  }
+  _updateVolume() {
     let muted = this._stream.is_muted;
     if (!muted) {
       this.volume = this._stream.volume / this._control.get_vol_max_norm();
     }
     this.emit('stream-status', this.volume);
-  },
+  }
 });
-const SuggestionsBox = new Lang.Class({
-  Name: 'SuggestionsBox',
-  Extends: PopupMenu.PopupBaseMenuItem,
-  _init: function () {
-    this.actor = new St.BoxLayout({
-      name: 'suggestionsBox',
-      style_class: 'suggestions-box',
-    });
+const SuggestionsBox = GObject.registerClass({
+  GTypeName: 'SuggestionsBox',
+  Signals: {
+    'suggestions-clicked': {
+      param_types: [GObject.TYPE_STRING],
+    },
+    'entry-focus': {},
+  }},
+  class SuggestionsBox extends PopupMenu.PopupBaseMenuItem {
+  constructor() {
+    super();
+    //TODO removed for compitability
+    //this.actor = new St.BoxLayout({
+    //  name: 'suggestionsBox',
+    //  style_class: 'suggestions-box',
+    //});
     this.suggestFirstLabel = new St.Label({
       name: 'suggestionFirst',
       text: 'first',
@@ -1583,13 +1667,14 @@ const SuggestionsBox = new Lang.Class({
       text: 'Clear',
     });
 
-    this.actor.add_actor(this.suggestFirstButton);
-    this.actor.add_actor(this.suggestSecondButton);
-    this.actor.add_actor(this.suggestThirdButton);
+    //TODO Removed for compitability
+    //this.actor.add_actor(this.suggestFirstButton);
+    //this.actor.add_actor(this.suggestSecondButton);
+    //this.actor.add_actor(this.suggestThirdButton);
     this.setEventListeners();
     this.initSuggestionFiles();
-  },
-  setEventListeners: function () {
+  }
+  setEventListeners() {
     this.suggestFirstButtonButtonId = this.suggestFirstButton.connect(
       'button-press-event',
       Lang.bind(this, this.sendSuggestion)
@@ -1626,8 +1711,8 @@ const SuggestionsBox = new Lang.Class({
       'style-changed',
       Lang.bind(this, this.showSuggestFocus)
     );
-  },
-  destroy: function () {
+  }
+  destroy() {
     if (this.suggestFirstButtonButtonId) {
       this.suggestFirstButton.disconnect(this.suggestFirstButtonButtonId);
       this.suggestFirstButtonButtonId = 0;
@@ -1688,12 +1773,12 @@ const SuggestionsBox = new Lang.Class({
       this.clearText.destroy();
       this.clearText = undefined;
     }
-  },
-  initSuggestionFiles: function () {
+  }
+  initSuggestionFiles() {
     let keywordFileTemp, listFileTemp;
     let path = EXTENSIONDIR + '/suggestions/words1.txt';
     let wordlist = this.readFile(path);
-    this.wordListArray = wordlist.toString().split('\n');
+    this.wordListArray = ByteArray.toString(wordlist).split('\n');
     this.wordListArray = this.wordListArray.filter(Boolean);
     let baseLocation = EXTENSIONDIR + '/suggestions/';
     let files = [
@@ -1730,18 +1815,18 @@ const SuggestionsBox = new Lang.Class({
     ];
     for (let i = 0; i < files.length; i++) {
       keywordFileTemp = this.readFile(files[i].keywordFile);
-      keywordFileTemp = keywordFileTemp.toString().split('\n');
+      keywordFileTemp = ByteArray.toString(keywordFileTemp).toString().split('\n');
       keywordFileTemp = keywordFileTemp.filter(Boolean);
       files[i].keywordFile = keywordFileTemp;
       listFileTemp = this.readFile(files[i].listFile);
-      listFileTemp = listFileTemp.toString().split('\n');
+      listFileTemp = ByteArray.toString(listFileTemp).split('\n');
       listFileTemp = listFileTemp.filter(Boolean);
       files[i].listFile = listFileTemp;
     }
     this.files = files;
     this.setSuggestionsRandom();
-  },
-  showSuggestFocus: function (uploader, event) {
+  }
+  showSuggestFocus(uploader, event) {
     if (
       uploader.has_style_pseudo_class('focus') ||
       uploader.has_style_pseudo_class('hover')
@@ -1756,8 +1841,8 @@ const SuggestionsBox = new Lang.Class({
       this.suggestFocus.add_style_class_name('suggestions-focus-label');
       this.suggestFocus.set_text(' ');
     }
-  },
-  sendSuggestion: function (uploader, event) {
+  }
+  sendSuggestion(uploader, event) {
     let suggestString;
     if (event.type() === 1) {
       let symbol = event.get_key_symbol();
@@ -1790,8 +1875,8 @@ const SuggestionsBox = new Lang.Class({
       return Clutter.EVENT_PROPAGATE;
     }
     return 0;
-  },
-  setTerms: function (suggestTerm) {
+  }
+  setTerms(suggestTerm) {
     if (suggestTerm.length > 0) {
       let keywordToSearch = suggestTerm[suggestTerm.length - 1];
       let result = this.wordSuggest(keywordToSearch);
@@ -1805,8 +1890,8 @@ const SuggestionsBox = new Lang.Class({
         this.suggestThirdLabel.set_text('third');
       }
     }
-  },
-  wordSuggest: function (keywordToSearch) {
+  }
+  wordSuggest(keywordToSearch) {
     keywordToSearch = keywordToSearch.toString().toLowerCase();
     let len = 0,
       files = this.files,
@@ -1880,8 +1965,8 @@ const SuggestionsBox = new Lang.Class({
       return suggestion;
     }
     return suggestion;
-  },
-  readFile: function (filename) {
+  }
+  readFile(filename) {
     if (GLib.file_test(filename, GLib.FileTest.EXISTS)) {
       let file = Gio.file_new_for_path(filename);
       try {
@@ -1894,8 +1979,8 @@ const SuggestionsBox = new Lang.Class({
     } else {
       return 0;
     }
-  },
-  _suggestionsRandom: function () {
+  }
+  _suggestionsRandom() {
     let randomFile,
       randomText = [];
     for (let i = 0; i < 3; i++) {
@@ -1904,17 +1989,19 @@ const SuggestionsBox = new Lang.Class({
       randomText[i] = randomFile[Math.floor(randomFile.length * Math.random())];
     }
     return randomText;
-  },
-  setSuggestionsRandom: function () {
+  }
+  setSuggestionsRandom() {
     let random = this._suggestionsRandom();
     this.suggestFirstLabel.set_text(random[0]);
     this.suggestSecondLabel.set_text(random[1]);
     this.suggestThirdLabel.set_text(random[2]);
-  },
+  }
 });
-const MycroftBarAnimation = new Lang.Class({
-  Name: 'MycroftBarAnimation',
-  _init: function () {
+const MycroftBarAnimation = GObject.registerClass({
+  GTypeName: 'MycroftBarAnimation'},
+  class MycroftBarAnimation extends GObject.Object{
+  constructor() {
+    super();
     this.animationBox = new St.BoxLayout({
       name: 'animationBox',
       x_expand: true,
@@ -1926,13 +2013,14 @@ const MycroftBarAnimation = new Lang.Class({
     this.colorizeEffect = new Clutter.ColorizeEffect({
       enabled: true,
     });
-    this._icon = new Clutter.Texture({
-      filter_quality: Clutter.TextureQuality.HIGH,
-    });
-    this._icon.set_from_file(screen_image.get_path());
+    //TODO removed for compitability
+    //this._icon = new Clutter.Texture({
+    //  filter_quality: Clutter.TextureQuality.HIGH,
+    //});
+    //this._icon.set_from_file(screen_image.get_path());
     this.initActor();
-  },
-  initActor: function (status) {
+  }
+  initActor(status) {
     if (this.actor) {
       this.actor.clear_effects();
       this.actor.remove_actor(this._icon);
@@ -1941,19 +2029,20 @@ const MycroftBarAnimation = new Lang.Class({
       this.actor = null;
     }
     this.colorizeEffect.set_tint(getColor(status));
-    this.actor = new St.Bin({
-      child: this._icon,
-      y_align: St.Align.MIDDLE,
-      x_align: Clutter.ActorAlign.START,
-      x_expand: true,
-      y_expand: true,
-      effect: this.colorizeEffect,
-    });
-    this.actor.set_pivot_point(0.5, 0.5);
-    this.actor.set_scale(0.8, 0.8);
-    this.animationBox.add_actor(this.actor);
-  },
-  startAnimation: function (uploader, status) {
+    //TODO removed for compitability
+    //this.actor = new St.Bin({
+    //  child: this._icon,
+    //  y_align: St.Align.MIDDLE,
+    //  x_align: Clutter.ActorAlign.START,
+    //  x_expand: true,
+    //  y_expand: true,
+    //  effect: this.colorizeEffect,
+    //});
+    //this.actor.set_pivot_point(0.5, 0.5);
+    //this.actor.set_scale(0.8, 0.8);
+    //this.animationBox.add_actor(this.actor);
+  }
+  startAnimation(uploader, status) {
     this.initActor(status);
     if (animation_status) {
       Tweener.addTween(this.actor, {
@@ -1967,8 +2056,8 @@ const MycroftBarAnimation = new Lang.Class({
         }),
       });
     }
-  },
-  loopTween: function () {
+  }
+  loopTween() {
     Tweener.addTween(this.actor, {
       opacity: 255,
       time: 0.5,
@@ -1980,8 +2069,8 @@ const MycroftBarAnimation = new Lang.Class({
         this.loopTween2();
       }),
     });
-  },
-  loopTween2: function () {
+  }
+  loopTween2() {
     Tweener.addTween(this.actor, {
       opacity: 127,
       time: 0.75,
@@ -1992,8 +2081,8 @@ const MycroftBarAnimation = new Lang.Class({
         this.loopTween();
       }),
     });
-  },
-  stopAnimation: function (uploader, status) {
+  }
+  stopAnimation(uploader, status) {
     if (animation_status) {
       Tweener.removeTweens(this.actor);
       Tweener.addTween(this.actor, {
@@ -2005,8 +2094,8 @@ const MycroftBarAnimation = new Lang.Class({
       });
     }
     this.initActor(status);
-  },
-  destroy: function () {
+  }
+  destroy() {
     if (this.actor) {
       this.actor.destroy();
       this.actor = undefined;
@@ -2015,13 +2104,21 @@ const MycroftBarAnimation = new Lang.Class({
       this.animationBox.destroy();
       this.animationBox = undefined;
     }
-  },
+  }
 });
-const TopMenuBar = new Lang.Class({
-  Name: 'TopMenuBar',
-  Extends: PopupMenu.PopupBaseMenuItem,
-  _init: function () {
+
+const TopMenuBar = GObject.registerClass({
+  GTypeName: 'TopMenuBar',
+  Signals: {
+    'mycroft-status' : {
+      param_types: [GObject.TYPE_STRING],
+    },
+    'mycroft-service-clicked': {}, 
+  }},
+  class TopMenuBar extends PopupMenu.PopupBaseMenuItem{
+  constructor() {
     // this.parent();
+    super();
     this.menuBar = new St.BoxLayout({
       name: 'xyz',
       style_class: 'menuBar',
@@ -2075,13 +2172,16 @@ const TopMenuBar = new Lang.Class({
       x_expand: true,
       y_expand: true,
     });
-
+    //changed for compitability
+    /*
     this._menuBarCENTER.add_actor(this.statusLabel, {
       x_expand: true,
       x_align: St.Align.MIDDLE,
       y_expand: true,
       y_align: St.Align.MIDDLE,
     });
+    */
+    this._menuBarCENTER.add_child(this.statusLabel)
 
     this.searchIcon = new St.Icon({
       icon_name: 'system-search-symbolic',
@@ -2112,24 +2212,36 @@ const TopMenuBar = new Lang.Class({
       child: this.dummyIcon,
     });
 
+    //changed for compitability
+    /*
     this.menuBar.add_actor(this._menuBarLEFT, {
       x_align: St.Align.Start,
       min_width_set: true,
     });
+    */
+    this.menuBar.add_child(this._menuBarLEFT)
 
+    /*
+    //changed for compitability
     this.menuBar.add_actor(this._menuBarCENTER, {
       x_align: St.Align.CENTER,
       min_width_set: true,
     });
+    */
+    this.menuBar.add_child(this._menuBarCENTER)
 
+    /*
     this.menuBar.add_actor(this._menuBarRIGHT, {
       x_align: St.Align.END,
       fixed_position_set: true,
     });
+    */
+    this.menuBar.add_child(this._menuBarRIGHT)
 
     this.setEventListeners();
-  },
-  setEventListeners: function () {
+  }
+  setEventListeners() {
+    //TODO removed for compitability
     this.updateStatusId = this.connect(
       'mycroft-status',
       Lang.bind(this, this.updateStatus)
@@ -2146,8 +2258,8 @@ const TopMenuBar = new Lang.Class({
         this.setSearchActive();
       })
     );
-  },
-  updateStatus: function (uploader, status) {
+  }
+  updateStatus(uploader, status) {
     if (status === 'active') {
       this.setSearchActive();
     }
@@ -2155,8 +2267,8 @@ const TopMenuBar = new Lang.Class({
     this.updateStatusLabelText(status);
     this.updateServiceIcon(status);
     this.updateStatusLabelStyle(status);
-  },
-  updateStatusLabelText: function (status) {
+  }
+  updateStatusLabelText(status) {
     if (status === 'failed') {
       this.statusLabel.set_text('Mycroft Service Failed');
     } else if (status === 'install') {
@@ -2165,14 +2277,14 @@ const TopMenuBar = new Lang.Class({
       status = status.substr(0, 1).toUpperCase() + status.substr(1);
       this.statusLabel.set_text('Mycroft is ' + status);
     }
-  },
-  updateStatusLabelStyle: function (status) {
+  }
+  updateStatusLabelStyle(status) {
     let style = this.statusLabel.get_style_class_name();
     let abc = style.split(' ');
     this.statusLabel.remove_style_class_name(abc[1]);
     this.statusLabel.add_style_class_name(status);
-  },
-  updateServiceIcon: function (status) {
+  }
+  updateServiceIcon(status) {
     switch (status) {
     case 'active':
       this.serviceIcon.icon_name = 'media-playback-pause-symbolic';
@@ -2193,22 +2305,22 @@ const TopMenuBar = new Lang.Class({
     default:
       // do nothing
     }
-  },
-  setSearchActive: function () {
+  }
+  setSearchActive() {
     this.hintActor.remove_style_pseudo_class('active');
     this.searchActor.remove_style_pseudo_class('active');
     this.searchActor.add_style_pseudo_class('active');
-  },
-  setHintActive: function () {
+  }
+  setHintActive() {
     this.searchActor.remove_style_pseudo_class('active');
     this.hintActor.remove_style_pseudo_class('active');
     this.hintActor.add_style_pseudo_class('active');
-  },
-  setInactive: function () {
+  }
+  setInactive() {
     this.hintActor.remove_style_pseudo_class('active');
     this.searchACtor.remove_style_pseudo_class('active');
-  },
-  destroy: function () {
+  }
+  destroy() {
     if (this._statusLabel) {
       this._statusLabel.destroy();
       this._statusLabel = undefined;
@@ -2229,7 +2341,7 @@ const TopMenuBar = new Lang.Class({
       this.menuBar.destroy();
       this.menuBar = undefined;
     }
-  },
+  }
 });
 
 function getColor(status) {
@@ -2335,7 +2447,7 @@ function isEmpty(obj) {
 // Main
 
 function init() {
-  Convenience.initTranslations('gnome-shell-extension-mycroft');
+  ExtensionUtils.initTranslations('gnome-shell-extension-mycroft');
 }
 
 function enable() {
@@ -2346,6 +2458,7 @@ function enable() {
     miPanel = null;
   }
   miPanel = new MycroftUI();
+  log('enable() finsished');
 }
 
 function disable() {

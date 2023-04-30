@@ -1,23 +1,27 @@
 /* eslint-env node */
 /* eslint-disable no-sync */
-var gulp = require('gulp');
-var sass = require('gulp-sass');
+
+import gulp from 'gulp'
+import dartSass from 'sass'
+import gulpSass from 'gulp-sass'
+const sass = gulpSass(dartSass)
 
 
-var del = require('del');
-var execSync = require('child_process').execSync;
-var osenv = require('osenv');
-var path = require('path');
-var runSequence = require('run-sequence');
+import {deleteSync} from 'del'
+import {execSync} from 'child_process'
+import osenv from 'osenv'
+import path from 'path'
+import runSequence from 'run-sequence'
 
-var eslint = require('gulp-eslint');
-var threshold = require('gulp-eslint-threshold');
-var jsonEditor = require('gulp-json-editor');
-var shell = require('gulp-shell');
-var symlink = require('gulp-symlink');
-var zip = require('gulp-zip');
+import eslint from 'gulp-eslint'
+import threshold from 'gulp-eslint-threshold'
+import jsonEditor from 'gulp-json-editor'
+import shell from 'gulp-shell'
+import symlink from 'gulp-symlink'
+import zip from 'gulp-zip'
 
-var metadata = require('./src/metadata.json');
+
+import metadata from './src/metadata.json' assert {type: "json"}
 
 var paths = {
   src: [
@@ -40,16 +44,18 @@ var paths = {
 function getVersion(rawTag) {
   var sha1, tag;
   sha1 = execSync('git rev-parse --short HEAD').toString().replace(/\n$/, '');
-
+  console.log('rawTag');
+  console.log(rawTag);
+  //for now use tag from src/metadata.json
+  if (rawTag) {
+    return rawTag;
+  }
+  
   try {
     tag = execSync('git describe --tags --exact-match ' + sha1 + ' 2>/dev/null').toString().replace(/\n$/, '');
   } catch (e) {
     return sha1;
-  }
-
-  if (rawTag) {
-    return tag;
-  }
+  }  
 
   var v = parseInt(tag.replace(/^v/, ''), 10);
   if (isNaN(v)) {
@@ -85,7 +91,8 @@ gulp.task('sass', function () {
 });
 
 gulp.task('clean', function (cb) {
-  return del([ 'build/', metadata.uuid ], cb);
+   let deleted = deleteSync([ 'build/**', '!build']);
+   cb();
 });
 
 gulp.task('copy', function () {
@@ -112,10 +119,10 @@ gulp.task('copy-license', function () {
 gulp.task('copy-release', function () {
   return gulp.src('build/**/*').pipe(gulp.dest(metadata.uuid));
 });
-gulp.task('metadata', function () {
+gulp.task('metadata', async function () {
   return gulp.src(paths.metadata)
     .pipe(jsonEditor(function (json) {
-      json.version = getVersion();
+      json.version = getVersion(metadata.version);
       return json;
     }, {
       end_with_newline: true,
@@ -124,14 +131,13 @@ gulp.task('metadata', function () {
 });
 
 gulp.task('schemas', shell.task([
-  'mkdir -p build/schemas',
-  'glib-compile-schemas --strict --targetdir build/schemas src/schemas/',
-]));
+    'mkdir -p build/schemas',
+    'glib-compile-schemas --strict --targetdir build/schemas src/schemas/',
+  ])  
+);
 
-gulp.task('build', function (cb) {
-  runSequence(
-    'clean',
-    [
+gulp.task('build',  gulp.series(
+      'clean',
       'metadata',
       'schemas',
       'copy',
@@ -140,12 +146,9 @@ gulp.task('build', function (cb) {
       'copy-suggestions',
       'copy-license',
       'sass',
-    ],
-    cb
-  );
-});
+));
 
-gulp.task('watch', [ 'build' ], function () {
+gulp.task('watch', gulp.series('build', function () {
   gulp.watch(paths.src, [ 'copy' ]);
   gulp.watch(paths.lib, [ 'copy-lib' ]);
   gulp.watch('shellscripts/*.sh', [ 'copy-scripts' ]);
@@ -154,26 +157,43 @@ gulp.task('watch', [ 'build' ], function () {
   gulp.watch(paths.metadata, [ 'metadata' ]);
   gulp.watch(paths.schemas, [ 'schemas' ]);
   gulp.watch('sass/*.scss', [ 'sass' ]);
-});
+}));
+
+
 gulp.task('reset-prefs', shell.task([
   'dconf reset -f /org/gnome/shell/extensions/mycroft/',
 ]));
 
-gulp.task('uninstall', function (cb) {
-  return del([ paths.install ], {
+gulp.task('uninstall', async function (cb) {
+  return deleteSync([ paths.install ], {
     force: true,
   }, cb);
 });
 
-gulp.task('install-link', [ 'uninstall', 'build' ], function () {
+gulp.task('install-link', gulp.series('uninstall', 'build' , function () {
   return gulp.src([ 'build' ])
     .pipe(symlink(paths.install));
-});
+}));
 
-gulp.task('install', [ 'uninstall', 'build' ], function () {
-  return gulp.src([ 'build/**/*' ])
+
+gulp.task('deploy', async function(){
+  return gulp.src('build/**/*')
     .pipe(gulp.dest(paths.install));
 });
+
+gulp.task('install', gulp.series( 
+  'uninstall',
+  'clean',
+  'metadata',
+  'schemas',
+  'copy',
+  'copy-scripts',
+  'copy-icons',
+  'copy-suggestions',
+  'copy-license',
+  'sass',
+  'deploy')
+);
 
 gulp.task('require-clean-wd', function (cb) {
   var count = execSync('git status --porcelain | wc -l').toString().replace(/\n$/, '');
@@ -219,7 +239,7 @@ gulp.task('dist', function (cb) {
   });
 });
 
-gulp.task('release', [ 'lint' ], function (cb) {
+gulp.task('release', gulp.series('lint', function (cb) {
   runSequence(
     'require-clean-wd',
     'bump',
@@ -227,7 +247,7 @@ gulp.task('release', [ 'lint' ], function (cb) {
     'dist',
     cb
   );
-});
+}));
 
 gulp.task('enable-debug', shell.task([
   'dconf write /org/gnome/shell/extensions/mycroft/debug true',
@@ -282,3 +302,5 @@ gulp.task('default', function () {
   );
   /* eslint-esnable no-console, max-len */
 });
+
+//exports.install = series('uninstall', 'build' , 'deploy');
