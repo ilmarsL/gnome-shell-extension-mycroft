@@ -1308,7 +1308,7 @@ const ChatBox = GObject.registerClass({
       Lang.bind(this, this.suggestionsClick)
     );
     this.suggestionsEntryFocusId = this._suggestionsResults.connect(
-     'entry-focus',
+     'enter-event',
       Lang.bind(this, this._entryFocus)
     );
     this.inputStreamId = this.inputStream.connect(
@@ -1615,11 +1615,10 @@ const SuggestionsBox = GObject.registerClass({
   class SuggestionsBox extends PopupMenu.PopupBaseMenuItem {
   constructor() {
     super();
-    //TODO removed for compitability
-    //this.actor = new St.BoxLayout({
-    //  name: 'suggestionsBox',
-    //  style_class: 'suggestions-box',
-    //});
+    this._suggestionBox = new St.BoxLayout({
+      name: 'suggestionsBox',
+      style_class: 'suggestions-box',
+    });
     this.suggestFirstLabel = new St.Label({
       name: 'suggestionFirst',
       text: 'first',
@@ -1634,7 +1633,6 @@ const SuggestionsBox = GObject.registerClass({
       name: 'suggestionSecond',
       text: 'second',
     });
-
     this.suggestSecondButton = new St.Button({
       name: 'suggestSecondButton',
       child: this.suggestSecondLabel,
@@ -1647,7 +1645,6 @@ const SuggestionsBox = GObject.registerClass({
       z_position: 1,
       text: 'third',
     });
-
     this.suggestThirdButton = new St.Button({
       name: 'suggestThirdButton',
       child: this.suggestThirdLabel,
@@ -1667,10 +1664,10 @@ const SuggestionsBox = GObject.registerClass({
       text: 'Clear',
     });
 
-    //TODO Removed for compitability
-    //this.actor.add_actor(this.suggestFirstButton);
-    //this.actor.add_actor(this.suggestSecondButton);
-    //this.actor.add_actor(this.suggestThirdButton);
+    this.add_child(this._suggestionBox);
+    this._suggestionBox.add_actor(this.suggestFirstButton);
+    this._suggestionBox.add_actor(this.suggestSecondButton);
+    this._suggestionBox.add_actor(this.suggestThirdButton);
     this.setEventListeners();
     this.initSuggestionFiles();
   }
@@ -2459,6 +2456,7 @@ function enable() {
   }
   miPanel = new MycroftUI();
   log('enable() finsished');
+  
 }
 
 function disable() {
