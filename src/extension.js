@@ -322,7 +322,7 @@ const MycroftServiceManager = GObject.registerClass(
       this.locked = false;
     }
     onMessage(connection, type, message) {
-      let data = JSON.parse(message.get_data());
+      let data = JSON.parse(ByteArray.toString(message.get_data()));
       if (data.type === 'connected') {
         this.emitServiceStatus('active'); // Active();
       } else if (data.type === 'speak') {
