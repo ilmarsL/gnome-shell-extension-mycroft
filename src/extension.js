@@ -4,6 +4,8 @@ const ExtensionUtils = imports.misc.extensionUtils;
 const Me = ExtensionUtils.getCurrentExtension();
 const Config = imports.misc.config;
 const Clutter = imports.gi.Clutter;
+const GdkPixbuf = imports.gi.GdkPixbuf;
+const Cogl = imports.gi.Cogl;
 const Gettext = imports.gettext.domain('gnome-shell-extension-mycroft');
 const Gio = imports.gi.Gio;
 const Gtk = imports.gi.Gtk;
@@ -578,6 +580,7 @@ const MycroftUI = GObject.registerClass({
       })
     );
     
+    /*
     this.mycroftServiceMycroftAnimationStartId = this.mycroftService.connect(
       'mycroft-animation-start',
       Lang.bind(
@@ -593,6 +596,7 @@ const MycroftUI = GObject.registerClass({
         this.myUi.displayBox.searchBox.barAnimation.stopAnimation
       )
     );
+    */
     
     this.myUiDisplayBoxSearchBoxChatBoxSendMessageId = this.myUi.displayBox.searchBox.chatBox.connect(
       'send-message',
@@ -863,9 +867,9 @@ const MycroftPopup = GObject.registerClass({
   removeItem(gObj) {
     this.popupMenu.Main.actor.remove_actor(gObj);
   }
-  destroy() {
-    this.popupMenuMain.destroy();
+  destroy() {    
     this.topMenuBar.destroy();
+    this.popupMenuMain.destroy();
     this.displayBox.destroy();
   }
 });
@@ -921,8 +925,8 @@ const SearchBox = GObject.registerClass({
         y_expand: true,
         vertical: true,
       });
-      this.barAnimation = new MycroftBarAnimation();
-      this.actor.add_actor(this.barAnimation.animationBox);
+      //this.barAnimation = new MycroftBarAnimation();
+      //this.actor.add_actor(this.barAnimation.animationBox);
       this.sBox = new St.BoxLayout({
         x_expand: true,
         y_expand: true,
@@ -947,10 +951,13 @@ const SearchBox = GObject.registerClass({
       this.sBox.add_actor(this.label);
   }
   destroy() {
+    /*
+    log('Calling SearchBox destroy');
     if (this.barAnimation) {
       this.barAnimation.destroy();
       this.barAnimation = undefined;
     }
+    */
     if (this.chatBox) {
       this.chatBox.destroy();
       this.chatBox = undefined;
@@ -2010,12 +2017,19 @@ const MycroftBarAnimation = GObject.registerClass({
     this.colorizeEffect = new Clutter.ColorizeEffect({
       enabled: true,
     });
-    //TODO removed for compitability
-    //this._icon = new Clutter.Texture({
-    //  filter_quality: Clutter.TextureQuality.HIGH,
-    //});
-    //this._icon.set_from_file(screen_image.get_path());
-    this.initActor();
+    this._icon = new Clutter.Image()
+    
+    let pixbuf = GdkPixbuf.Pixbuf.new_from_file(screen_image.get_path());
+
+    this._icon.set_data(pixbuf.get_pixels(), pixbuf.get_has_alpha() ? Cogl.PixelFormat.RGBA_8888 : Cogl.PixelFormat.RGB_888,
+    pixbuf.get_width(), pixbuf.get_height(), pixbuf.get_rowstride());
+    /*
+    this._icon = new Clutter.Texture({
+    {
+      filter_quality: Clutter.TextureQuality.HIGH,
+    });
+    this._icon.set_from_file();
+    this.initActor();*/
   }
   initActor(status) {
     if (this.actor) {
@@ -2027,17 +2041,18 @@ const MycroftBarAnimation = GObject.registerClass({
     }
     this.colorizeEffect.set_tint(getColor(status));
     //TODO removed for compitability
-    //this.actor = new St.Bin({
-    //  child: this._icon,
-    //  y_align: St.Align.MIDDLE,
-    //  x_align: Clutter.ActorAlign.START,
-    //  x_expand: true,
-    //  y_expand: true,
-    //  effect: this.colorizeEffect,
-    //});
-    //this.actor.set_pivot_point(0.5, 0.5);
-    //this.actor.set_scale(0.8, 0.8);
-    //this.animationBox.add_actor(this.actor);
+    this.actor = new St.Bin({
+      //child: this._icon,
+      y_align: St.Align.MIDDLE,
+      x_align: Clutter.ActorAlign.START,
+      x_expand: true,
+      y_expand: true,
+      effect: this.colorizeEffect,
+    });
+  
+    this.actor.set_pivot_point(0.5, 0.5);
+    this.actor.set_scale(0.8, 0.8);
+    this.animationBox.add_actor(this.actor);
   }
   startAnimation(uploader, status) {
     this.initActor(status);
